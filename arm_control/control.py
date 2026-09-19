@@ -1,4 +1,4 @@
-"""Pure neutral-relative robot-arm mapping and fail-closed tracking state."""
+"""Neutral-relative robot-arm mapping with a user-controlled run/pause latch."""
 
 from dataclasses import dataclass
 import math
@@ -27,7 +27,7 @@ class Controller:
 
     Calibration snapshots any complete tracked pose after the countdown.
     Only the arm/wrist zero points depend on that pose; pinch is absolute.
-    Neither calibration nor tracking reacquisition automatically resumes.
+    Tracking loss and calibration never change the user's run/pause state.
     """
 
     def __init__(self, config: Config):
@@ -49,9 +49,7 @@ class Controller:
         return [float(v) for v in angles]
 
     def sync_angles(self, angles) -> None:
-        """Synchronize paused outputs after a firmware hold without recalibration."""
-        if self.active:
-            raise ValueError("pause before synchronizing held device outputs")
+        """Synchronize device outputs without changing calibration or run state."""
         self._angles = self._checked_angles(angles)
         self._filtered = list(self._angles)
 
@@ -61,14 +59,11 @@ class Controller:
         self._filtered = list(self._angles)
         self.calibrated = False
         self.active = False
-        self.status = "Press C to set your current pose as neutral"
+        self.status = "SPACE to run; C to set a reference pose"
         self._calibrating = False
         self._calibration_ready_at = None
         self._reference = None
         self._last_update = None
-        self._last_valid = None
-        self._current = (None, None, None, None)
-        self._loss_since = None
 
     @staticmethod
     def _time(now: float) -> None:
@@ -79,7 +74,7 @@ class Controller:
         self._time(now)
         if not math.isfinite(delay) or delay < 0:
             raise ValueError("calibration delay must be finite and nonnegative")
-        self.pause("Show both hands and your right arm - any pose")
+        self.status = "Show both hands and your right arm - any pose"
         self.calibrated = False
         self._reference = None
         self._calibrating = True
@@ -95,17 +90,12 @@ class Controller:
 
     def resume(self, now: float) -> bool:
         self._time(now)
-        if (not self.calibrated or self._last_valid is None
-                or not all(v is not None for v in self._current)
-                or now < self._last_valid
-                or now - self._last_valid >= self.config.loss_timeout - 1e-9):
-            self.pause("Resume needs calibration and fresh tracking of both hands")
-            return False
+        if not self.calibrated and not self._calibrating:
+            self.begin_calibration(now)
         self.active = True
-        self.status = "Tracking"
+        self.status = "Running" if self.calibrated else "Running - waiting for a tracked reference pose"
         self._last_update = now
         self._filtered = list(self._angles)
-        self._loss_since = None
         return True
 
     @staticmethod
@@ -135,30 +125,20 @@ class Controller:
         self._reference = values[:3]
         self.calibrated = True
         self._calibrating = False
-        self.status = "Calibrated - press SPACE to start"
+        self.status = "Reference saved - running" if self.active else "Calibrated - press SPACE to start"
 
     def update(self, observation: Observation, now: float) -> tuple[float, ...]:
         self._time(now)
-        dt = 0.0 if self._last_update is None else now - self._last_update
+        dt = 0.0 if self._last_update is None else max(0.0, now - self._last_update)
         self._last_update = now
-        if dt < 0 or dt >= self.config.loss_timeout - 1e-9:
-            self.pause("Tracking frame gap; resume to move")
         values = self._values(observation)
-        self._current = values
         complete = all(v is not None for v in values)
-        if self._loss_since is not None and now - self._loss_since >= self.config.loss_timeout - 1e-9:
-            self.pause("Tracking lost; reacquire both hands and resume")
-        if complete:
-            self._last_valid = now
-            self._loss_since = None
-        elif self._loss_since is None:
-            self._loss_since = now
         if self._calibrating:
             self._calibrate(values, now)
             return self.angles
         if not self.active:
             return self.angles
-        self.status = "Tracking" if complete else "Missing tracking; affected joints held"
+        self.status = "Running - tracking" if complete else "Running - waiting for missing tracking; last angles held"
         alpha = 1.0 if self.config.smoothing_tau == 0 else -math.expm1(-dt / self.config.smoothing_tau)
         for i, value in enumerate(values):
             if value is None:
@@ -178,7 +158,5 @@ class Controller:
                 self._filtered[i] = self._angles[i]
                 continue
             self._filtered[i] += alpha * (target - self._filtered[i])
-            step = self._filtered[i] - self._angles[i]
-            limit = self.config.max_speed * max(0.0, dt)
-            self._angles[i] += max(-limit, min(limit, step))
+            self._angles[i] = self._filtered[i]
         return self.angles

@@ -25,17 +25,17 @@ Setup creates `.venv`, installs the locked Windows dependencies, and downloads t
 
 In the preview:
 
-Press **V** in the preview window to cycle to the next available camera. The app checks camera indices 0–3, skips unavailable devices, and keeps the current camera if no alternative is found. The window stays responsive while searching. Every switch attempt holds the arm and clears calibration; press **C**, then Space, after choosing a camera. Camera selection applies to the current run; change `camera` in `config.toml` to set the startup default.
+Press **V** in the preview window to cycle to the next available camera. The app checks camera indices 0–3, skips unavailable devices, and keeps the current camera if no alternative is found. Camera switching preserves your run/pause choice and reference pose. Camera selection applies to the current run; change `camera` in `config.toml` to set the startup default.
 
 1. Keep one person in view, including the right shoulder, elbow, wrist, and both hands. Keep the hands apart so their arm associations are clear.
 2. Choose any comfortable pose with your right arm and both hands visible. Your elbow and wrist can be bent, and your fingers can be open or pinched.
-3. Press **C**. After a four-second countdown, the first complete tracked frame becomes your neutral arm/wrist reference. There is no hold-steady test or additional capture delay. Pressing C again restarts the countdown.
-4. Press **Space** to start. Turn the left hand like a clock hand; bend the right elbow and wrist; pinch/open the right thumb and index finger.
+3. Optionally press **C** to choose a reference pose after a four-second countdown. There is no hold-steady test or additional capture delay. C preserves your run/pause choice and holds the last angles until the new reference is captured.
+4. Press **Space** to start. If no reference exists, the first complete tracked pose supplies it automatically. Turn the left hand like a clock hand; bend the right elbow and wrist; pinch/open the right thumb and index finger.
 5. Press **Space** to pause and hold, or **Q/Escape** to quit. The window's close button also stops control.
 
-The large status banner shows green **RUNNING** when the arm follows you, amber **PAUSED** when it is held, and blue **CALIBRATING** during the countdown or while waiting for tracking. **PREVIEW** means the servos are disconnected. Calibration finishes paused; press Space to start movement.
+The large status banner shows your chosen mode: green **RUNNING** or amber **PAUSED**. Running remains selected through missing tracking, camera changes, calibration, and USB failures. The banner identifies disconnected USB or a pending reference separately. Blue **CALIBRATING** means you are setting a reference while paused. Space always toggles the mode, including while the camera is unavailable or switching.
 
-Calibration records the left-hand rotation, right-elbow bend, and right-wrist bend as software zero points. Subsequent changes from those angles control GPIO6–8 around 90 degrees. Any detected pose is accepted; calibration does not move the robot. Rotating the whole right forearm without bending the wrist does not change the wrist's relative angle.
+Calibration records the left-hand rotation, right-elbow bend, and right-wrist bend as software zero points. Subsequent changes from those angles control GPIO6–8 around 90 degrees. Any detected pose is accepted. A new reference takes effect automatically if running, or waits for Space if paused. Rotating the whole right forearm without bending the wrist does not change the wrist's relative angle.
 
 If calibration waits after the countdown, the instruction beneath the banner identifies a hand or joint the camera cannot currently track. Keep your right arm and both hands visible and apart. Missing or invalid tracking cannot supply a reference angle; your actual pose is never rejected for being bent or pinched.
 
@@ -55,7 +55,7 @@ The original sketch identifies a **Waveshare ESP32-C5-WIFI6-KIT-N16R4**. Use the
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run.ps1 -Port COM9
 ```
 
-Replace `COM9` with the actual USB UART port; Bluetooth COM ports are not the robot. Opening a UART may reset the board and center the servos. The app waits for startup, performs a versioned handshake, and stays paused until you calibrate and press Space. The earlier manual-only firmware must be updated before this app can connect.
+Replace `COM9` with the actual USB UART port; Bluetooth COM ports are not the robot. Opening a UART may reset the board and center the servos. The app waits for startup, performs a versioned handshake, and initially stays paused until Space. A reconnect restores the previously selected run/pause state. Upload the current tracking firmware to remove the older firmware's automatic timeout.
 
 To compile without uploading:
 
@@ -76,13 +76,13 @@ The retained 50Hz, 14-bit PWM maps nominal 0..180 degrees to 1000..2000 microsec
 
 GPIO9 defaults to open=90, closed=0. Set `claw_closed` to the tested closed position (including 180 if that matches your linkage) and keep it inside GPIO9's limits. Pinch closure is proportional to thumb/index separation divided by palm width: `pinch_closed_ratio = 0.2` sets fully closed and `pinch_open_ratio = 1.0` sets fully open. These thresholds are independent of calibration and can be adjusted for your hand. Calibrating with pinched fingers is valid; once you press Space the claw follows your pinch. Do not reverse both the claw endpoint and its direction unless you intend that combined effect.
 
-The firmware also enforces hard 0..180 bounds and a 90 degrees/second slew limit for manual and tracking moves. `max_speed` in the app may reduce that limit. Narrower app joint limits apply to tracking; manual serial commands use firmware limits. Physical travel may differ from nominal degrees.
+The servo protocol accepts finite nominal angles in 0..180. There is no firmware or app speed cap; firmware applies each target on its next 50Hz output tick. Optional `smoothing_tau` and `deadband` filter tracking jitter. Narrower configured joint ranges apply to tracking; manual commands use the full protocol range. Physical travel may differ from nominal degrees. The obsolete `max_speed` and `loss_timeout` settings have been removed.
 
 ## Loss of tracking, pause, and reconnect
 
-A missing control immediately freezes its target. If any control remains missing for 500ms, if camera frames stop, or if a serial command fails, movement pauses. The firmware independently freezes its current output after 500ms without a valid tracking update. It keeps sending holding pulses, rather than dropping the arm or moving it back to center.
+A missing control keeps its last target while any visible controls continue updating. Running stays selected indefinitely, and returning tracking updates the targets immediately. Camera stalls and old frame timestamps do not pause the app. The firmware has no inactivity watchdog: it retains its last target and continues accepting poses without another resume command.
 
-Reacquiring your hands does not resume movement: press Space. On USB failure press **R** to reconnect, then **C** and Space. Reconnecting may reboot/recenter the board. Pausing retains calibration and synchronizes the app with the firmware's held output before resuming.
+On USB failure, the app retains your reference and run/pause choice. Press **R** to reconnect; if running was selected, control continues automatically. Reconnecting may reboot/recenter the board. Space explicitly pauses and holds the current output. Q/Escape and closing the window also stop the application. Basic command syntax, finite-number checks, and supported servo-angle bounds remain.
 
 Quit and pause are software holds, not electrical emergency stops. `off` stops pulses and can release holding torque while power remains connected. Disconnect servo power when necessary for mechanical work.
 
@@ -102,9 +102,9 @@ Quit and pause are software holds, not electrical emergency stops. `off` stops p
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test.ps1
 ```
 
-If the camera cannot open, press **V** in the window, check Windows **Privacy & security > Camera**, allow desktop apps, or close competing camera apps. The shortcut remains available even when the current camera has no feed. If your only camera failed to open, fix its permissions or competing app, then restart this app to retry it. Camo/virtual cameras may be different indices from the integrated webcam. Models run on the CPU; reduce resolution if the frame-age indicator approaches 500ms. The app retains only the latest captured frame to avoid a growing camera queue. Normal MediaPipe native-library warnings may appear on stderr.
+If the camera cannot open, press **V** in the window, check Windows **Privacy & security > Camera**, allow desktop apps, or close competing camera apps. The shortcut remains available even when the current camera has no feed. If your only camera failed to open, fix its permissions or competing app, then restart this app to retry it. Camo/virtual cameras may be different indices from the integrated webcam. Models run on the CPU; reduce resolution if tracking feels delayed. The app retains only the latest captured frame to avoid a growing camera queue. Normal MediaPipe native-library warnings may appear on stderr.
 
-`requirements.txt` lists direct dependencies; `requirements-lock.txt` records the complete tested Python 3.12 Windows environment. Only one OpenCV package is installed. User-specific calibration is kept in memory and must be repeated after restart/reconnect. Editing config requires restarting the app.
+`requirements.txt` lists direct dependencies; `requirements-lock.txt` records the complete tested Python 3.12 Windows environment. Only one OpenCV package is installed. The reference pose is kept in memory across camera changes and reconnects; restarting the app clears it. Editing config requires restarting the app.
 
 ## Serial protocol and manual controls
 
@@ -116,9 +116,9 @@ If the camera cannot open, press **V** in the window, check Windows **Privacy & 
 | `resume` | `OK resume`; allows tracking updates |
 | `pose 90 100 80 50` | `OK pose`; sets all four targets |
 | `hold` | `OK hold a6 a7 a8 a9`; freezes current outputs |
-| Invalid/expired command | `ERR reason`; timeout requires explicit resume |
+| Invalid command | `ERR reason`; valid tracking remains enabled |
 
-The tracking sketch includes **absolute-angle** manual commands: `1 90`, `2 45`, `3 120`, `4 60`, `all 90`, `1 off`, `off`, and `help`. Thus `1 90` means center; it does not add 90 degrees. Your preserved `RELATIVE-CW-v4` sample instead uses signed relative increments and `center`/`status`. These are separate firmware programs. Tracking-sketch manual commands pause tracking; manual moves slew to their target without requiring repeated heartbeats. Use them only with the app disconnected. After `off`, `resume` alone leaves pulses disabled; an accepted pose enables the outputs again.
+The tracking sketch includes **absolute-angle** manual commands: `1 90`, `2 45`, `3 120`, `4 60`, `all 90`, `1 off`, `off`, and `help`. Thus `1 90` means center; it does not add 90 degrees. Your preserved `RELATIVE-CW-v4` sample instead uses signed relative increments and `center`/`status`. These are separate firmware programs. Manual moves and off commands explicitly leave tracking mode; `help` does not. Targets apply directly without repeated heartbeats. Use manual commands with the app disconnected. After `off`, `resume` alone leaves pulses disabled; an accepted pose enables the outputs again.
 
 See [verification notes](docs/verification.md) for actual tests and remaining hardware checks.
 

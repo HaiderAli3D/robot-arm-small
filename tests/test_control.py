@@ -25,16 +25,16 @@ def advance(controller, observation, start=1.1, frames=20):
 
 
 class ControllerTests(unittest.TestCase):
-    def test_requires_calibration_and_explicit_resume(self):
+    def test_resume_starts_without_calibration_and_captures_when_visible(self):
         c = Controller(Config())
-        self.assertFalse(c.resume(0))
-        c.begin_calibration(0)
-        for tick in range(11):
-            c.update(NEUTRAL, tick / 10)
+        self.assertTrue(c.resume(0))
+        c.update(Observation(None,None,None,None),10)
+        self.assertTrue(c.active)
+        self.assertFalse(c.calibrated)
+        c.update(NEUTRAL,11)
         self.assertTrue(c.calibrated)
-        self.assertFalse(c.active)
+        self.assertTrue(c.active)
         self.assertEqual(c.angles, (90, 90, 90, 90))
-        self.assertTrue(c.resume(1))
 
     def test_neutral_relative_mapping_and_proportional_pinch(self):
         c = calibrated(observation=Observation(30, 5, -5, 1))
@@ -104,10 +104,10 @@ class ControllerTests(unittest.TestCase):
             self.assertAlmostEqual(opened[3],90)
             self.assertTrue(all(math.isfinite(v) for v in opened))
 
-    def test_slew_rate_and_smoothing(self):
-        c = calibrated(Config(smoothing_tau=0, deadband=0, max_speed=30))
-        self.assertAlmostEqual(c.update(Observation(90, 90, 90, 0.2), 1.2)[0], 93)
-        smooth = calibrated(Config(smoothing_tau=1, deadband=0, max_speed=90))
+    def test_no_slew_cap_and_optional_smoothing(self):
+        c = calibrated(Config(smoothing_tau=0, deadband=0))
+        self.assertEqual(c.update(Observation(90, 90, 90, 0.2), 1.2), (180,180,180,0))
+        smooth = calibrated(Config(smoothing_tau=1, deadband=0))
         delta = smooth.update(Observation(10, 0, 0, 1), 1.2)[0] - 90
         self.assertGreater(delta, 0)
         self.assertLess(delta, 1)
@@ -125,35 +125,35 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(c.angles[3], 90)
         self.assertTrue(c.active)
 
-    def test_prolonged_loss_pauses_all_and_reacquisition_requires_resume(self):
+    def test_prolonged_loss_stays_running_and_reacquisition_moves_immediately(self):
         c = calibrated()
         for tick in range(6):
             c.update(Observation(30, None, 30, 1), 1.2 + tick / 10)
-        self.assertFalse(c.active)
+        self.assertTrue(c.active)
         held = c.angles
-        self.assertFalse(c.resume(1.7))
-        c.update(Observation(90, 90, 90, 0.2), 1.8)
-        self.assertEqual(c.angles, held)
-        self.assertFalse(c.active)
-        self.assertTrue(c.resume(1.8))
+        c.update(Observation(None,None,None,None), 600)
+        self.assertEqual(c.angles,held)
+        self.assertTrue(c.active)
+        c.update(Observation(90, 90, 90, 0.2), 600.1)
+        self.assertEqual(c.angles,(180,180,180,0))
+        self.assertTrue(c.active)
 
-    def test_different_missing_channels_still_count_as_continuous_loss(self):
+    def test_different_missing_channels_do_not_pause(self):
         c = calibrated()
         for tick in range(7):
             c.update(Observation(None, 0, 0, 1) if tick % 2 else Observation(0, None, 0, 1), 1.2 + tick / 10)
-        self.assertFalse(c.active)
+        self.assertTrue(c.active)
 
-    def test_long_frame_gap_pauses_before_new_movement(self):
+    def test_long_frame_gap_does_not_pause(self):
         c = calibrated()
-        self.assertEqual(c.update(Observation(90, 90, 90, 0.2), 2), (90, 90, 90, 90))
-        self.assertFalse(c.active)
-        self.assertTrue(c.resume(2))
+        self.assertEqual(c.update(Observation(90, 90, 90, 0.2), 20), (180,180,180,0))
+        self.assertTrue(c.active)
 
-    def test_resume_rejects_stale_observation(self):
+    def test_resume_accepts_stale_or_missing_observation(self):
         c = calibrated()
         c.pause()
-        self.assertFalse(c.resume(1.7))
-        self.assertFalse(c.active)
+        self.assertTrue(c.resume(1.7))
+        self.assertTrue(c.active)
 
     def test_pause_does_not_accumulate_smoothing_state(self):
         c = calibrated(Config(smoothing_tau=1, deadband=0))
@@ -169,7 +169,7 @@ class ControllerTests(unittest.TestCase):
             c = calibrated()
             for tick in range(7):
                 c.update(obs, 1.2 + tick / 10)
-            self.assertFalse(c.active)
+            self.assertTrue(c.active)
             self.assertTrue(all(math.isfinite(v) for v in c.angles))
 
     def test_reset_cancels_in_progress_calibration(self):
@@ -193,22 +193,37 @@ class ControllerTests(unittest.TestCase):
         self.assertTrue(c.resume(1.3))
         self.assertEqual(c.update(Observation(-5, 5, 0, 1), 1.4), (85, 95, 90, 90))
 
-    def test_sync_rejects_active_state_and_invalid_angles(self):
+    def test_sync_preserves_run_state_and_rejects_unencodable_angles(self):
         c = calibrated()
-        with self.assertRaises(ValueError):
-            c.sync_angles((90, 90, 90, 90))
-        c.pause()
+        c.sync_angles((90,90,90,90))
+        self.assertTrue(c.active)
         for angles in ((90, 90), (90, 90, 90, math.nan), (90, 90, 90, 181)):
             with self.assertRaises(ValueError):
                 c.sync_angles(angles)
         self.assertEqual(c.angles, (90, 90, 90, 90))
 
-    def test_reacquisition_at_loss_deadline_cannot_bypass_pause(self):
+    def test_explicit_pause_stays_paused_through_reacquisition(self):
         c = calibrated()
+        c.pause()
         for now in (1.2, 1.4, 1.6):
             c.update(Observation(0, None, 0, 1), now)
         self.assertEqual(c.update(Observation(90, 90, 90, 0.2), 1.7), (90, 90, 90, 90))
         self.assertFalse(c.active)
+
+    def test_recalibration_retains_running_state_and_manual_pause_still_works(self):
+        c = calibrated()
+        c.begin_calibration(2,delay=4)
+        self.assertTrue(c.active)
+        for now in (3,4,5):
+            self.assertEqual(c.update(Observation(50,80,40,.3),now),(90,)*4)
+            self.assertTrue(c.active)
+        c.update(Observation(50,80,40,.3),6)
+        self.assertTrue(c.active)
+        self.assertTrue(c.calibrated)
+        c.pause()
+        c.update(Observation(90,90,90,.1),7)
+        self.assertFalse(c.active)
+        self.assertEqual(c.angles,(90,)*4)
 
 
 if __name__ == "__main__":

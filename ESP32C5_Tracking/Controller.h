@@ -14,7 +14,7 @@ class Controller {
       : reply_(reply), output_(output), context_(context) {}
   void begin(uint32_t now) {
     resumed_ = false; length_ = 0; lineError_ = nullptr; carriageReturn_ = false;
-    lastUpdate_ = lastPose_ = now;
+    lastUpdate_ = now;
     for (unsigned i = 0; i < 4; ++i) {
       current_[i] = target_[i] = 90.0f; enabled_[i] = true;
       output_(context_, i, current_[i], true);
@@ -22,20 +22,15 @@ class Controller {
     reportAngles("ROBOT_ARM 1");
   }
   void tick(uint32_t now) {
-    checkWatchdog(now);
     if (uint32_t(now - lastUpdate_) < 20) return;
     lastUpdate_ = now;
-    // No catch-up jumps after stalled loops: at most 1.8 degrees each 20ms.
+    // Apply requested positions directly on each 50Hz output update.
     for (unsigned i = 0; i < 4; ++i) {
-      const float difference = target_[i] - current_[i];
-      if (difference > 1.8f) current_[i] += 1.8f;
-      else if (difference < -1.8f) current_[i] -= 1.8f;
-      else current_[i] = target_[i];
+      current_[i] = target_[i];
       output_(context_, i, current_[i], enabled_[i]);
     }
   }
   void receive(char character, uint32_t now) {
-    checkWatchdog(now); // Queued late commands cannot bypass the watchdog.
     const unsigned char c = static_cast<unsigned char>(character);
     if (c == '\n') {
       if (lineError_) reply_(context_, lineError_);
@@ -56,7 +51,7 @@ class Controller {
   void* context_;
   float current_[4] = {90, 90, 90, 90}, target_[4] = {90, 90, 90, 90};
   bool enabled_[4] = {true, true, true, true}, resumed_ = false;
-  uint32_t lastUpdate_ = 0, lastPose_ = 0;
+  uint32_t lastUpdate_ = 0;
   char buffer_[96] = {};
   size_t length_ = 0;
   const char* lineError_ = nullptr;
@@ -64,12 +59,6 @@ class Controller {
   void freeze() {
     resumed_ = false;
     for (unsigned i = 0; i < 4; ++i) target_[i] = current_[i];
-  }
-  void checkWatchdog(uint32_t now) {
-    // Unsigned subtraction handles millis() wraparound.
-    if (resumed_ && uint32_t(now - lastPose_) >= 500) {
-      freeze(); reply_(context_, "ERR timeout");
-    }
   }
   void reportAngles(const char* prefix) {
     char response[64];
@@ -109,16 +98,15 @@ class Controller {
       }
       if (!resumed_) { reply_(context_, "ERR paused"); return; }
       for (unsigned i = 0; i < 4; ++i) { target_[i] = float(values[i]); enabled_[i] = true; }
-      lastPose_ = now; reply_(context_, "OK pose"); return;
+      reply_(context_, "OK pose"); return;
     }
     if (count == 1 && strcmp(name, "hello") == 0) { freeze(); reportAngles("ROBOT_ARM 1"); return; }
     if (count == 1 && strcmp(name, "hold") == 0) { freeze(); reportAngles("OK hold"); return; }
     if (count == 1 && strcmp(name, "resume") == 0) {
-      freeze(); resumed_ = true; lastPose_ = now; lastUpdate_ = now;
+      freeze(); resumed_ = true; lastUpdate_ = now;
       reply_(context_, "OK resume"); return;
     }
     if (count == 1 && strcmp(name, "help") == 0) {
-      freeze();
       reply_(context_, "Commands: hello | resume | pose a6 a7 a8 a9 | hold | 1..4 angle | all angle | 1..4 off | off | help");
       return;
     }

@@ -12,11 +12,10 @@ class ConfigTests(unittest.TestCase):
             path.write_text(text, encoding='utf-8')
             return load_config(path)
 
-    def test_defaults_keep_center_and_rate_bounded(self):
+    def test_defaults_keep_center_and_hand_sensitivity(self):
         config = load_config(None)
         self.assertEqual(config.claw_open, 90)
         self.assertEqual(len(config.joints), 4)
-        self.assertLessEqual(config.max_speed, 90)
         self.assertEqual(config.hand_confidence, .35)
 
     def test_user_joint_override_preserves_other_defaults(self):
@@ -41,7 +40,7 @@ class ConfigTests(unittest.TestCase):
 
     def test_nonfinite_direct_config_is_rejected(self):
         with self.assertRaises(ValueError):
-            Config(max_speed=float('nan'))
+            Config(smoothing_tau=float('nan'))
 
 
 if __name__ == '__main__':

@@ -4,7 +4,7 @@ Opening a UART may reset an ESP32 through its adapter's DTR/RTS wiring. Wait
 two seconds for that boot to settle, resynchronize any unfinished device input
 line, discard stale replies, then explicitly send ``hello`` to freeze outputs
 and obtain current angles. The same handshake also works when opening does not
-reset the board. No reconnect or resume is implicit.
+reset the board. Session restores the user's run selection after reconnecting.
 """
 
 from __future__ import annotations
@@ -115,7 +115,7 @@ class SerialLink:
         serial = self._serial
         if serial is None:
             raise LinkError("Not connected; reconnect explicitly")
-        # Never mistake a queued ACK or asynchronous watchdog error for a reply.
+        # Never mistake a queued ACK or unrelated error for the next reply.
         if serial.in_waiting:
             raise LinkError("Unexpected pending firmware data; reconnect explicitly")
         deadline = self._clock() + self.timeout

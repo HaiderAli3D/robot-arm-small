@@ -61,12 +61,20 @@ def _display(frame, pose, hands, matches, observation, session, inference_ms, fr
     panel = cv2.copyMakeBorder(display, 0, 300, 0, 0, cv2.BORDER_CONSTANT, value=(25,28,28))
     top = display.shape[0]
     controller = session.controller
-    if controller.calibrating:
+    if controller.active:
+        if session.link is None:
+            state = 'RUNNING - preview only'
+        elif not session.connected:
+            state = 'RUNNING - USB disconnected'
+        elif controller.calibrating:
+            state = 'RUNNING - setting reference'
+        else:
+            state = 'RUNNING - SPACE to pause'
+        color = (100,220,100)
+    elif controller.calibrating:
         state, color = 'CALIBRATING - arm held', (220,155,65)
     elif session.link is None:
         state, color = 'PREVIEW - servos disconnected', (175,175,175)
-    elif controller.active and session.connected:
-        state, color = 'RUNNING - arm follows your movements', (100,220,100)
     else:
         state, color = 'PAUSED - arm held', (60,190,245)
     cv2.rectangle(panel, (0,top), (width,top+52), color, -1)
@@ -137,7 +145,7 @@ def run(config, args):
                 camera_failed = False
             captured = None if selector.switching else camera.latest(after=sequence, timeout=.03)
             now = time.monotonic()
-            unavailable = camera.error or (now-last_capture > (10 if frame is None else 2))
+            unavailable = captured is None and (camera.error or (now-last_capture > (10 if frame is None else 2)))
             if selector.switching:
                 camera_status = selector.status
             elif unavailable:
@@ -151,6 +159,7 @@ def run(config, args):
                 observation = MISSING
                 camera_status = f'Camera {selector.index} unavailable - press V to switch camera'
             elif captured is not None:
+                camera_failed = False
                 sequence, last_capture, frame = captured.sequence, captured.captured_at, captured.image
                 inference_start = time.monotonic()
                 observation, matches, pose, hands = tracker.process(frame, last_capture)
@@ -158,11 +167,7 @@ def run(config, args):
                 inference_ms = (now-inference_start)*1000
                 latencies.append(inference_ms)
                 processed += 1
-                if now-last_capture >= config.loss_timeout:
-                    observation = MISSING
-                    camera_status = 'Frame too old; reduce resolution or check camera'
-                else:
-                    camera_status = selector.status
+                camera_status = selector.status
                 valid_frames += int(all(value is not None for value in (
                     observation.rotation, observation.elbow, observation.wrist, observation.pinch)))
                 session.frame(observation, captured_at=last_capture, now=now)
@@ -186,9 +191,9 @@ def run(config, args):
                 matches = {}
                 observation = MISSING
                 inference_ms = 0
-            elif key in (ord('c'), ord('C')) and not selector.switching and not camera_failed:
+            elif key in (ord('c'), ord('C')):
                 session.calibrate(time.monotonic())
-            elif key == 32 and not selector.switching and not camera_failed:
+            elif key == 32:
                 if session.controller.active:
                     session.pause()
                 else:

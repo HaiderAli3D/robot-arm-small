@@ -13,27 +13,25 @@ class Session:
         self.connected = link is None
         self.connection_status = 'Preview only - no servo connection' if link is None else 'Disconnected; R to connect'
         self._next_send = 0.0
-        self._last_capture = None
 
     def _fault(self, error):
-        angles = self.controller.angles
-        self.controller.reset(angles)
         self.connected = False
-        self.connection_status = f'{error}; R to reconnect, then C to calibrate'
+        self.connection_status = f'{error}; R to reconnect (run state retained)'
         if self.link:
             self.link.close()
 
     def connect(self):
         if self.link is None:
             return
-        self.controller.pause()
         try:
             if self.connected:
                 self.link.close()
-            self.controller.reset(self.link.connect())
-            self._last_capture = None
+            self.controller.sync_angles(self.link.connect())
             self.connected = True
             self.connection_status = f'Connected: {self.link.port}' if hasattr(self.link, 'port') else 'Connected'
+            if self.controller.active:
+                self.link.resume()
+                self.link.send_pose(self.controller.angles)
         except LinkError as error:
             self._fault(error)
 
@@ -49,36 +47,27 @@ class Session:
         self._hold()
 
     def calibrate(self, now):
-        self.pause()
-        if self.connected:
-            self.controller.begin_calibration(now, delay=4.0)
+        self.controller.begin_calibration(now, delay=4.0)
 
     def prepare_camera_switch(self):
-        """Hold before opening another camera; its coordinate reference is new."""
-        self.pause('Switching camera')
-        self.controller.reset(self.controller.angles)
-        self._last_capture = None
+        """Camera selection leaves the run latch and reference pose intact."""
+        self.controller.status = 'Switching camera - run state retained'
 
     def resume(self, now):
-        if not self.connected or not self.controller.resume(now):
-            return False
-        if self.link:
+        self.controller.resume(now)
+        if self.link and self.connected:
             try:
                 self.link.resume()
                 self.link.send_pose(self.controller.angles)
             except LinkError as error:
                 self._fault(error)
-                return False
         self._next_send = now + 1 / self.config.send_hz
         return True
 
     def step(self, observation: Observation, now):
-        active = self.controller.active
         self.controller.update(observation, now)
-        if active and not self.controller.active:
-            self._hold()
         if self.controller.active and now >= self._next_send:
-            if self.link:
+            if self.link and self.connected:
                 try:
                     self.link.send_pose(self.controller.angles)
                 except LinkError as error:
@@ -88,18 +77,10 @@ class Session:
         return self.controller.angles
 
     def frame(self, observation: Observation, captured_at, now):
-        """Use capture time, not UI polling time, for the camera watchdog."""
-        gap = self._last_capture is not None and captured_at-self._last_capture >= self.config.loss_timeout - 1e-9
-        stale = now-captured_at >= self.config.loss_timeout - 1e-9
-        self._last_capture = captured_at
-        if (gap or stale) and self.controller.active:
-            self.pause('Camera frame gap; Space to resume with fresh tracking')
-        return self.step(Observation(None,None,None,None) if stale else observation, now)
+        """Apply the available observation without changing run state."""
+        return self.step(observation, now)
 
     def camera_missing(self, now):
-        if (self._last_capture is not None and now-self._last_capture >= self.config.loss_timeout - 1e-9
-                and self.controller.active):
-            self.pause('Camera frame gap; Space to resume with fresh tracking')
         return self.step(Observation(None,None,None,None), now)
 
     def close(self):
