@@ -34,11 +34,11 @@ class Config:
     claw_open: float = 90
     claw_closed: float = 0
     pinch_closed_ratio: float = 0.2
+    pinch_open_ratio: float = 1.0
     smoothing_tau: float = 0.12
     deadband: float = 1.0
     max_speed: float = 90.0
     loss_timeout: float = 0.5
-    calibration_seconds: float = 1.0
     confidence: float = 0.6
     hand_confidence: float = 0.35
     camera: int = 0
@@ -55,11 +55,14 @@ class Config:
         _number('claw_closed', self.claw_closed, self.joints[3].minimum, self.joints[3].maximum)
         for name, low, high in (
             ('pinch_closed_ratio', 0, 0.39), ('smoothing_tau', 0, 2),
+            ('pinch_open_ratio', 0.01, 10),
             ('deadband', 0, 10), ('max_speed', 0.1, 90),
-            ('loss_timeout', 0.05, 0.5), ('calibration_seconds', 0.05, 10),
+            ('loss_timeout', 0.05, 0.5),
             ('confidence', 0.1, 1), ('hand_confidence', 0.1, 1), ('send_hz', 5, 30),
         ):
             _number(name, getattr(self, name), low, high)
+        if self.pinch_open_ratio <= self.pinch_closed_ratio:
+            raise ValueError('pinch_open_ratio must exceed pinch_closed_ratio')
         for name, low, high in (('camera', 0, 100), ('width', 160, 3840), ('height', 120, 2160)):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int):

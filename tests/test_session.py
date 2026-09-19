@@ -55,10 +55,7 @@ class SessionTests(unittest.TestCase):
         self.assertFalse(session.controller.calibrated)
         self.assertIn('1 seconds', session.controller.status)
         self.assertFalse(session.resume(3.9))
-        for tick in range(40, 50):
-            session.step(NEUTRAL, tick / 10)
-        self.assertFalse(session.controller.calibrated)
-        session.step(NEUTRAL, 5.0)
+        session.step(Observation(-45,90,60,.2), 4.0)
         self.assertTrue(session.controller.calibrated)
         self.assertFalse(session.controller.active)
         self.assertEqual(device.commands, ['hello', 'hold'])

@@ -18,21 +18,15 @@ def _relative(value: float, reference: float) -> float:
     return (value - reference + 180.0) % 360.0 - 180.0
 
 
-def _circular_mean(values: list[float]) -> float:
-    return math.degrees(math.atan2(sum(math.sin(math.radians(x)) for x in values),
-                                   sum(math.cos(math.radians(x)) for x in values)))
-
-
 class Controller:
     """Map GPIO6/7/8 around nominal 90 and GPIO9 around claw_open.
 
     Claw target is open + direction * gain * closure * (closed - open),
-    clamped to configured joint bounds. Closure is 0 at calibrated open
-    pinch and 1 at pinch_closed_ratio; reversing direction reverses travel.
+    clamped to configured joint bounds. Closure is 0 at pinch_open_ratio
+    and 1 at pinch_closed_ratio; reversing direction reverses travel.
 
-    Calibration requires <=8-degree excursion from its first sample on each
-    angular channel and <=0.12 pinch-ratio excursion, with elbow and wrist
-    within 20 degrees of straight and pinch >0.4 for the configured duration.
+    Calibration snapshots any complete tracked pose after the countdown.
+    Only the arm/wrist zero points depend on that pose; pinch is absolute.
     Neither calibration nor tracking reacquisition automatically resumes.
     """
 
@@ -67,10 +61,9 @@ class Controller:
         self._filtered = list(self._angles)
         self.calibrated = False
         self.active = False
-        self.status = "Calibrate with straight right arm and wrist, open hand"
+        self.status = "Press C to set your current pose as neutral"
         self._calibrating = False
         self._calibration_ready_at = None
-        self._samples = []
         self._reference = None
         self._last_update = None
         self._last_valid = None
@@ -86,11 +79,10 @@ class Controller:
         self._time(now)
         if not math.isfinite(delay) or delay < 0:
             raise ValueError("calibration delay must be finite and nonnegative")
-        self.pause("Hold neutral pose steady to calibrate")
+        self.pause("Show both hands and your right arm - any pose")
         self.calibrated = False
         self._reference = None
         self._calibrating = True
-        self._samples = []
         self._last_update = now
         self._calibration_ready_at = now + delay
         if delay:
@@ -137,42 +129,12 @@ class Controller:
                         'Face your right palm toward the camera; show thumb and index')
         problem = next((help_text for value, help_text in zip(values,missing_help)
                         if value is None), None)
-        if problem is None:
-            if values[1] > 20:
-                problem = f'Straighten your right elbow: bend {values[1]:.0f} degrees (needs 20 or less)'
-            elif abs(_relative(values[2], 0)) > 20:
-                problem = f'Straighten your right wrist: bend {abs(_relative(values[2],0)):.0f} degrees (needs 20 or less)'
-            elif values[3] <= max(0.4, self.config.pinch_closed_ratio):
-                problem = 'Spread your right thumb and index finger apart'
         if problem:
-            self._samples = []
             self.status = problem
             return
-        restart = None
-        if self._samples:
-            anchor = self._samples[0][1]
-            movement = (abs(_relative(values[0], anchor[0])) > 8,
-                        abs(values[1] - anchor[1]) > 8,
-                        abs(_relative(values[2], anchor[2])) > 8,
-                        abs(values[3] - anchor[3]) > 0.12)
-            restart = next((label for moved,label in zip(movement,
-                           ('left hand moved','right elbow moved','right wrist moved','finger spacing changed'))
-                            if moved), None)
-            if restart:
-                self._samples = []
-        self._samples.append((now, values))
-        elapsed = now - self._samples[0][0]
-        progress = min(100, round(100 * elapsed / self.config.calibration_seconds))
-        self.status = (f'Hold steady: {progress}%' if restart is None
-                       else f'Restarted: {restart} - hold steady: 0%')
-        if elapsed + 1e-9 < self.config.calibration_seconds:
-            return
-        columns = list(zip(*(sample for _, sample in self._samples)))
-        self._reference = (_circular_mean(columns[0]), sum(columns[1]) / len(columns[1]),
-                           _circular_mean(columns[2]), sum(columns[3]) / len(columns[3]))
+        self._reference = values[:3]
         self.calibrated = True
         self._calibrating = False
-        self._samples = []
         self.status = "Calibrated - press SPACE to start"
 
     def update(self, observation: Observation, now: float) -> tuple[float, ...]:
@@ -181,7 +143,6 @@ class Controller:
         self._last_update = now
         if dt < 0 or dt >= self.config.loss_timeout - 1e-9:
             self.pause("Tracking frame gap; resume to move")
-            self._samples = []
         values = self._values(observation)
         self._current = values
         complete = all(v is not None for v in values)
@@ -205,7 +166,8 @@ class Controller:
                 continue
             joint = self.config.joints[i]
             if i == 3:
-                closure = (self._reference[3] - value) / (self._reference[3] - self.config.pinch_closed_ratio)
+                closure = ((self.config.pinch_open_ratio - value)
+                           / (self.config.pinch_open_ratio - self.config.pinch_closed_ratio))
                 closure = max(0.0, min(1.0, closure))
                 target = self.config.claw_open + joint.direction * joint.gain * closure * (self.config.claw_closed - self.config.claw_open)
             else:

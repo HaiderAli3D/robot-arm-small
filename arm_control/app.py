@@ -85,7 +85,7 @@ def _display(frame, pose, hands, matches, observation, session, inference_ms, fr
              inputs,
              f'{camera_status} | inference {inference_ms:.0f} ms | frame age {frame_age*1000:.0f} ms',
              'C calibrate   SPACE start/pause   V switch camera   R reconnect   Q / ESC quit',
-             'Neutral: straight right arm + wrist, thumb/index open, left hand upright.']
+             'C saves any tracked pose after 4 seconds. Pinch always controls the claw.']
     for line in lines:
         for part in textwrap.wrap(line, max(70, int(width/8.2))):
             cv2.putText(panel, part, (14,y), cv2.FONT_HERSHEY_SIMPLEX, .52, (225,235,230), 1, cv2.LINE_AA)

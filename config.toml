@@ -11,11 +11,11 @@ send_hz = 30
 claw_open = 90
 claw_closed = 0
 pinch_closed_ratio = 0.2
+pinch_open_ratio = 1.0
 smoothing_tau = 0.12
 deadband = 1.0
 max_speed = 90
 loss_timeout = 0.5
-calibration_seconds = 1
 
 # Set limits for your mechanism BEFORE live use. These are nominal pulse angles.
 # direction = -1 reverses a control; gain scales its movement.

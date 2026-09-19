@@ -54,37 +54,31 @@ class ControllerTests(unittest.TestCase):
         self.assertAlmostEqual(advance(c, Observation(-179, 0, 0, 1))[0], 92)
         self.assertAlmostEqual(advance(c, Observation(-179, 0, 0, 1), start=3.1)[0], 92)
 
-    def test_calibration_uses_circular_reference(self):
+    def test_snapshot_reference_preserves_rotation_wraparound(self):
         c = Controller(Config(smoothing_tau=0, deadband=0))
         c.begin_calibration(0)
-        for tick in range(11):
-            c.update(Observation(179 if tick % 2 else -179, 0, 0, 1), tick / 10)
-        self.assertTrue(c.resume(1))
-        self.assertLess(abs(advance(c, Observation(180, 0, 0, 1), start=1)[0] - 90), 0.2)
+        c.update(Observation(179,0,0,1), 0)
+        self.assertTrue(c.resume(0))
+        self.assertAlmostEqual(advance(c, Observation(-179,0,0,1), start=0)[0], 92)
 
-    def test_calibration_requires_stable_straight_open_pose(self):
-        for invalid in (Observation(0, 30, 0, 1), Observation(0, 0, 30, 1),
-                        Observation(0, 0, 0, 0.4), Observation(None, 0, 0, 1)):
+    def test_calibration_accepts_any_detected_pose_in_one_frame(self):
+        for pose in (Observation(100,90,-65,1), Observation(-140,150,100,.4),
+                     Observation(0,180,-180,.2), Observation(0,0,0,0)):
             c = Controller(Config())
             c.begin_calibration(0)
-            for tick in range(15):
-                c.update(invalid, tick / 10)
-            self.assertFalse(c.calibrated)
-        c = Controller(Config())
-        c.begin_calibration(0)
-        for tick in range(15):
-            c.update(Observation(tick * 5, 0, 0, 1), tick / 10)
-        self.assertFalse(c.calibrated)
-        for tick in range(15, 26):
-            c.update(Observation(75, 0, 0, 1), tick / 10)
-        self.assertTrue(c.calibrated)
+            self.assertEqual(c.update(pose,0), (90,)*4)
+            self.assertTrue(c.calibrated)
+            self.assertFalse(c.active)
+            self.assertTrue(c.resume(0))
+            self.assertEqual(c.update(pose,.1)[:3], (90,)*3)
 
-    def test_calibration_tracking_gap_restarts_stability_period(self):
+    def test_calibration_waits_only_for_missing_tracking(self):
         c = Controller(Config())
-        c.begin_calibration(0)
-        c.update(NEUTRAL, 0)
-        c.update(NEUTRAL, 2)
+        c.begin_calibration(0,delay=4)
+        c.update(Observation(None,90,50,0), 4)
         self.assertFalse(c.calibrated)
+        c.update(Observation(80,90,50,0), 4.1)
+        self.assertTrue(c.calibrated)
 
     def test_calibration_explains_each_rejected_measurement(self):
         cases = (
@@ -92,9 +86,6 @@ class ControllerTests(unittest.TestCase):
             (Observation(0,None,0,1), 'right shoulder'),
             (Observation(0,0,None,1), 'right wrist'),
             (Observation(0,0,0,None), 'right palm'),
-            (Observation(0,35,0,1), '35'),
-            (Observation(0,0,-30,1), '30'),
-            (Observation(0,0,0,.3), 'thumb and index'),
         )
         for observation, explanation in cases:
             with self.subTest(observation=observation):
@@ -104,15 +95,14 @@ class ControllerTests(unittest.TestCase):
                 self.assertIn(explanation, c.status)
                 self.assertFalse(c.calibrated)
 
-    def test_calibration_reports_progress_and_reason_for_restart(self):
-        c = Controller(Config())
-        c.begin_calibration(0)
-        for tick in range(6):
-            c.update(NEUTRAL, tick / 10)
-        self.assertIn('50%', c.status)
-        c.update(Observation(25,0,0,1), .6)
-        self.assertIn('left hand moved', c.status)
-        self.assertIn('0%', c.status)
+    def test_pinched_calibration_never_divides_by_zero_and_claw_still_opens(self):
+        for ratio in (0,.2,.20000001,.4):
+            c = calibrated(observation=Observation(0,90,60,ratio))
+            closed = advance(c,Observation(0,90,60,.2))
+            self.assertAlmostEqual(closed[3],0)
+            opened = advance(c,Observation(0,90,60,1),start=3.1)
+            self.assertAlmostEqual(opened[3],90)
+            self.assertTrue(all(math.isfinite(v) for v in opened))
 
     def test_slew_rate_and_smoothing(self):
         c = calibrated(Config(smoothing_tau=0, deadband=0, max_speed=30))

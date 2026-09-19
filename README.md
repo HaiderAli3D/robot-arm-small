@@ -28,16 +28,16 @@ In the preview:
 Press **V** in the preview window to cycle to the next available camera. The app checks camera indices 0–3, skips unavailable devices, and keeps the current camera if no alternative is found. The window stays responsive while searching. Every switch attempt holds the arm and clears calibration; press **C**, then Space, after choosing a camera. Camera selection applies to the current run; change `camera` in `config.toml` to set the startup default.
 
 1. Keep one person in view, including the right shoulder, elbow, wrist, and both hands. Keep the hands apart so their arm associations are clear.
-2. Extend the right arm sideways so its wrist bend can be seen in the image. Keep its wrist straight and thumb/index open. Hold the left hand upright with fingers visible.
-3. Press **C**. A four-second countdown gives you time to show both hands. Then hold that pose steadily for one second and wait for **Calibrated**. Pressing C again restarts the countdown.
+2. Choose any comfortable pose with your right arm and both hands visible. Your elbow and wrist can be bent, and your fingers can be open or pinched.
+3. Press **C**. After a four-second countdown, the first complete tracked frame becomes your neutral arm/wrist reference. There is no hold-steady test or additional capture delay. Pressing C again restarts the countdown.
 4. Press **Space** to start. Turn the left hand like a clock hand; bend the right elbow and wrist; pinch/open the right thumb and index finger.
 5. Press **Space** to pause and hold, or **Q/Escape** to quit. The window's close button also stops control.
 
-The large status banner shows green **RUNNING** when the arm follows you, amber **PAUSED** when it is held, and blue **CALIBRATING** during the countdown and pose capture. **PREVIEW** means the servos are disconnected. Calibration finishes paused; press Space to start movement.
+The large status banner shows green **RUNNING** when the arm follows you, amber **PAUSED** when it is held, and blue **CALIBRATING** during the countdown or while waiting for tracking. **PREVIEW** means the servos are disconnected. Calibration finishes paused; press Space to start movement.
 
-Calibration allows up to 20 degrees of elbow/wrist departure from straight, but requires a steady pose. Large movement restarts the one-second capture. Input angles and tracking status help diagnose a missing or unstable control. Rotating the whole right forearm without bending the wrist does not change the wrist's relative angle.
+Calibration records the left-hand rotation, right-elbow bend, and right-wrist bend as software zero points. Subsequent changes from those angles control GPIO6–8 around 90 degrees. Any detected pose is accepted; calibration does not move the robot. Rotating the whole right forearm without bending the wrist does not change the wrist's relative angle.
 
-If calibration waits, follow the prominent instruction beneath the banner: it identifies the missing hand/joint, excessive elbow or wrist bend, or insufficient thumb/index separation. Keep both entire hands, including fingertips, inside the image and apart from each other. **Hold steady: 0–100%** shows capture progress; a restart names the measurement that changed. Calibration stays paused until you press Space.
+If calibration waits after the countdown, the instruction beneath the banner identifies a hand or joint the camera cannot currently track. Keep your right arm and both hands visible and apart. Missing or invalid tracking cannot supply a reference angle; your actual pose is never rejected for being bent or pinched.
 
 Hand sensitivity is set separately with `hand_confidence = 0.35` in `config.toml` (previously 0.6). Lower thresholds make detection more permissive and can also admit less reliable detections. The settings control MediaPipe's detection, presence, and tracking thresholds; see the [official Hand Landmarker options](https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker/python#configuration_options). Pose confidence remains 0.6. Left/right ownership comes from the arm positions, so uncertain handedness labels no longer discard otherwise usable hands. A 5% image-edge margin tolerates slightly clipped fingertips while keeping the wrist inside the image.
 
@@ -74,7 +74,7 @@ Use positional servos such as the existing sketch's MG90S. Continuous-rotation s
 
 The retained 50Hz, 14-bit PWM maps nominal 0..180 degrees to 1000..2000 microseconds. **Verify mechanical endpoints and direction before loading the arm.** Begin around 90 with small manual moves, then set `minimum`, `maximum`, `direction`, and `gain` in `config.toml`. For example, limit a joint to 60..120 for initial testing. The configured interval must contain 90.
 
-GPIO9 defaults to open=90, closed=0. Set `claw_closed` to the tested closed position (including 180 if that matches your linkage) and keep it inside GPIO9's limits. Pinch closure is proportional to thumb/index separation divided by palm width; `pinch_closed_ratio` sets the fully pinched threshold. The open reference is learned during calibration. Do not reverse both the claw endpoint and its direction unless you intend that combined effect.
+GPIO9 defaults to open=90, closed=0. Set `claw_closed` to the tested closed position (including 180 if that matches your linkage) and keep it inside GPIO9's limits. Pinch closure is proportional to thumb/index separation divided by palm width: `pinch_closed_ratio = 0.2` sets fully closed and `pinch_open_ratio = 1.0` sets fully open. These thresholds are independent of calibration and can be adjusted for your hand. Calibrating with pinched fingers is valid; once you press Space the claw follows your pinch. Do not reverse both the claw endpoint and its direction unless you intend that combined effect.
 
 The firmware also enforces hard 0..180 bounds and a 90 degrees/second slew limit for manual and tracking moves. `max_speed` in the app may reduce that limit. Narrower app joint limits apply to tracking; manual serial commands use firmware limits. Physical travel may differ from nominal degrees.
 

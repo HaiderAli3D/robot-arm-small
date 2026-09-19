@@ -28,6 +28,8 @@ class ConfigTests(unittest.TestCase):
         for text in ('max_speed=100', 'send_hz=100', 'camera=true', 'smoothing_tau=nan',
                      'deadband=-1', 'loss_timeout=1', 'unknown=3', 'claw_open=0',
                      'hand_confidence=0', 'hand_confidence=nan',
+                     'pinch_open_ratio=0.2', 'pinch_open_ratio=0.1',
+                     'pinch_open_ratio=nan', 'pinch_open_ratio=inf',
                      '[joints.gpio6]\nminimum=100', '[joints.gpio8]\ndirection=0',
                      '[joints.gpio9]\nminimum=30\n', '[joints.gpio5]\ngain=1',
                      '[joints.gpio7]\nminimun=4', 'joints=[]'):

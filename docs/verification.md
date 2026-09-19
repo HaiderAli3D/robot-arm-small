@@ -56,3 +56,9 @@ The camera change is local to the Python app; no additional firmware upload was 
 - Split hand model thresholds from pose confidence: hand detection/presence/tracking now use configurable `hand_confidence = 0.35`; pose confidence remains 0.6. These more permissive settings need operator assessment for detection quality and false positives.
 - All **105 Python tests** pass, including regression cases for clipped fingertips, uncertain handedness, rejected outliers, calibration guidance, countdown and calibration progress. Restarted the actual models and GUI on camera 1 with the COM70 connection confirmed.
 - Successful operator calibration under the new settings has not yet been observed. The changes expose remaining pose/tracking blockers rather than silently relaxing the neutral-pose requirements.
+
+## Follow-up: unrestricted pose snapshot
+
+At the user's explicit request, removed the straightness, open-hand and stability requirements described in earlier sections. Calibration now accepts the first complete tracked frame after the four-second countdown. It records three arm/wrist reference angles, stays paused, and imposes no additional sampling delay. The obsolete `calibration_seconds` setting has been removed.
+
+Claw mapping uses independent, validated `pinch_open_ratio` and `pinch_closed_ratio` endpoints. Calibrating while pinched is accepted without a zero/negative denominator; the claw still follows pinch/open directly after Space. All **105 Python tests** pass, including arbitrary bent/pinched poses, immediate capture at the four-second deadline, angular wraparound, missing tracking, no movement on capture, pinched-reference edge cases, and invalid claw endpoint settings.
