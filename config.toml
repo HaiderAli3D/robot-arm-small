@@ -2,9 +2,9 @@
 camera = 1
 width = 960
 height = 720
-confidence = 0.6
+confidence = 0.4
 # Lower values make hand detection/presence/tracking more permissive.
-hand_confidence = 0.35
+hand_confidence = 0.2
 send_hz = 30
 
 # All servos boot at 90 degrees; GPIO9 must physically be open there.

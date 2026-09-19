@@ -33,8 +33,8 @@ class Config:
     pinch_open_ratio: float = 1.0
     smoothing_tau: float = 0.12
     deadband: float = 1.0
-    confidence: float = 0.6
-    hand_confidence: float = 0.35
+    confidence: float = 0.4
+    hand_confidence: float = 0.2
     camera: int = 0
     width: int = 960
     height: int = 720

@@ -16,7 +16,13 @@ class ConfigTests(unittest.TestCase):
         config = load_config(None)
         self.assertEqual(config.claw_open, 90)
         self.assertEqual(len(config.joints), 4)
-        self.assertEqual(config.hand_confidence, .35)
+        self.assertEqual(config.confidence, .4)
+        self.assertEqual(config.hand_confidence, .2)
+
+    def test_supplied_config_uses_more_permissive_detection(self):
+        config = load_config(Path(__file__).resolve().parents[1] / 'config.toml')
+        self.assertEqual(config.confidence, .4)
+        self.assertEqual(config.hand_confidence, .2)
 
     def test_user_joint_override_preserves_other_defaults(self):
         config = self.load('[joints.gpio6]\ndirection=-1\ngain=0.5\n')

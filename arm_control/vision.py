@@ -25,7 +25,12 @@ def _visible(point, confidence):
             and (presence is None or presence >= confidence))
 
 
-def observation_from_results(pose_result, hand_result, width, height, confidence=.6):
+def _hand_point_valid(point):
+    # Allow a small clipping margin, independently for each control's inputs.
+    return _finite(point) and -.05 <= point.x <= 1.05 and -.05 <= point.y <= 1.05
+
+
+def observation_from_results(pose_result, hand_result, width, height, confidence=.4):
     """Return (Observation, anatomical side -> original hand result index)."""
     empty = Observation(None, None, None, None)
     if width <= 0 or height <= 0 or not pose_result.pose_landmarks:
@@ -46,13 +51,13 @@ def observation_from_results(pose_result, hand_result, width, height, confidence
     valid = []
     for index, hand in enumerate(hand_result.hand_landmarks):
         # Handedness score measures left/right classification, not detection.
-        # Ownership is assigned from pose wrists below. Permit a small border
-        # margin so one clipped fingertip does not discard the whole hand.
-        if (len(hand) == 21 and 0 <= hand[0].x <= 1 and 0 <= hand[0].y <= 1
-                and all(_finite(p) and -.05 <= p.x <= 1.05 and -.05 <= p.y <= 1.05 for p in hand)):
+        # Ownership only needs the wrist. A clipped or unusable fingertip must
+        # not discard an otherwise usable wrist/rotation measurement.
+        if (len(hand) == 21 and _finite(hand[0])
+                and 0 <= hand[0].x <= 1 and 0 <= hand[0].y <= 1):
             valid.append(index)
     assignment = associate_hands(wrists, [normalized(hand_result.hand_landmarks[i][0]) for i in valid],
-                                 max_distance=.12, ambiguity_margin=.035)
+                                 max_distance=.18, ambiguity_margin=.035)
     matches = {side: valid[index] for side, index in assignment.items()}
     elbow = wrist = rotation = pinch = None
     if all(_visible(pose[i], confidence) for i in (12, 14, 16)) and pose_result.pose_world_landmarks:
@@ -61,20 +66,25 @@ def observation_from_results(pose_result, hand_result, width, height, confidence
             interior = angle(*(Point(world[i].x, world[i].y, world[i].z) for i in (12, 14, 16)))
             elbow = None if interior is None else 180 - interior
     if 'right' in matches:
-        hand = [pixel(p) for p in hand_result.hand_landmarks[matches['right']]]
+        landmarks = hand_result.hand_landmarks[matches['right']]
+        hand = [pixel(p) for p in landmarks]
         # An edge-on or tiny palm is unreliable for pinch normalization.
-        if math.hypot(hand[5].x-hand[17].x, hand[5].y-hand[17].y) >= .01 * diagonal:
+        if (all(_hand_point_valid(landmarks[i]) for i in (4, 8, 5, 17))
+                and math.hypot(hand[5].x-hand[17].x, hand[5].y-hand[17].y) >= .01 * diagonal):
             pinch = pinch_ratio(hand[4], hand[8], hand[5], hand[17])
-        if all(_visible(pose[i], confidence) for i in (14, 16)):
+        if (_hand_point_valid(landmarks[9])
+                and all(_visible(pose[i], confidence) for i in (14, 16))):
             forearm = Point((pose[16].x-pose[14].x)*width, (pose[16].y-pose[14].y)*height)
             direction = Point(hand[9].x-hand[0].x, hand[9].y-hand[0].y)
             if math.hypot(direction.x, direction.y) >= .015 * diagonal:
                 wrist = signed_bend(-forearm.x, forearm.y, -direction.x, direction.y)
     if 'left' in matches:
-        hand = [pixel(p) for p in hand_result.hand_landmarks[matches['left']]]
-        dx, dy = hand[9].x-hand[0].x, hand[9].y-hand[0].y
-        if math.hypot(dx, dy) >= .015 * diagonal:
-            rotation = clockwise_angle(-dx, dy)
+        landmarks = hand_result.hand_landmarks[matches['left']]
+        if _hand_point_valid(landmarks[9]):
+            hand = [pixel(p) for p in landmarks]
+            dx, dy = hand[9].x-hand[0].x, hand[9].y-hand[0].y
+            if math.hypot(dx, dy) >= .015 * diagonal:
+                rotation = clockwise_angle(-dx, dy)
     return Observation(rotation, elbow, wrist, pinch), matches
 
 

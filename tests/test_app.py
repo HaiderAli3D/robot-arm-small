@@ -16,6 +16,15 @@ from arm_control.keyboard import KeyRepeater
 
 
 class AppCameraTests(unittest.TestCase):
+    def test_partial_hand_preview_skips_invalid_points_without_crashing(self):
+        points = [NS(x=.5, y=.5) for _ in range(21)]
+        points[8] = NS(x=float('nan'), y=.4)
+        points[20] = NS(x=1e30, y=.5)
+        frame = np.zeros((240,320,3), dtype=np.uint8)
+        panel = _display(frame, None, NS(hand_landmarks=[points]), {'right': 0},
+                         Observation(None,None,None,None), Session(Config()), 0, 0, 'Camera 1')
+        self.assertEqual(panel.shape[1], 960)
+
     def exercise(self, keys, failed_first=False, pending_probes=False, frame_plan=None,
                  camera_failures=(), tracker_failures=(), tracker_close_failures=(), servo_keys=None):
         cameras, trackers, panels, sessions, states, processed = [], [], [], [], [], []

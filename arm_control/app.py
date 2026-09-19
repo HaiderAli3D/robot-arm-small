@@ -1,6 +1,7 @@
 """Small OpenCV desktop UI. All motion is mediated by Session."""
 
 import json
+import math
 import statistics
 import textwrap
 import time
@@ -49,6 +50,9 @@ def _display(frame, pose, hands, matches, observation, session, inference_ms, fr
     def xy(p):
         return round((1-p.x)*(width-1)), round(p.y*(height-1))
 
+    def drawable(p):
+        return all(math.isfinite(v) and -2 <= v <= 3 for v in (p.x, p.y))
+
     if pose is not None and pose.pose_landmarks:
         points = pose.pose_landmarks[0]
         for a, b in ((11,13),(13,15),(12,14),(14,16)):
@@ -59,21 +63,21 @@ def _display(frame, pose, hands, matches, observation, session, inference_ms, fr
             color = (90,220,140) if side == 'right' else (240,190,85)
             points = hands.hand_landmarks[index]
             for a, b in HAND_EDGES:
-                cv2.line(display, xy(points[a]), xy(points[b]), color, 2)
+                if drawable(points[a]) and drawable(points[b]):
+                    cv2.line(display, xy(points[a]), xy(points[b]), color, 2)
             for point in points:
-                cv2.circle(display, xy(point), 3, color, -1)
+                if drawable(point):
+                    cv2.circle(display, xy(point), 3, color, -1)
             label = 'Right: wrist / claw' if side == 'right' else 'Left: rotation'
-            cv2.putText(display, label, xy(points[0]), cv2.FONT_HERSHEY_SIMPLEX, .5, color, 1, cv2.LINE_AA)
+            if drawable(points[0]):
+                cv2.putText(display, label, xy(points[0]), cv2.FONT_HERSHEY_SIMPLEX, .5, color, 1, cv2.LINE_AA)
     if width != 960:
         display = cv2.resize(display, (960, round(height*960/width)))
     width = display.shape[1]
     panel = cv2.copyMakeBorder(display, 0, 330, 0, 0, cv2.BORDER_CONSTANT, value=(25,28,28))
     top = display.shape[0]
     controller = session.controller
-    if session.servos_released:
-        state = ('RUNNING' if controller.active else 'PAUSED') + ' - servos released'
-        color = (100,220,100) if controller.active else (60,190,245)
-    elif controller.active:
+    if controller.active:
         if session.link is None:
             state = 'RUNNING - preview only'
         elif not session.connected:
@@ -217,7 +221,6 @@ def run(config, args):
                 session.camera_missing(now)
             if tracker_error and not selector.switching and not unavailable:
                 camera_status = tracker_error
-            session.tick(time.monotonic())
             if not args.headless:
                 cv2.imshow(WINDOW, _display(placeholder if frame is None else frame,
                                            pose, hands, matches, observation, session, inference_ms,

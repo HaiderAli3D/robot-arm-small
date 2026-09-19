@@ -16,26 +16,6 @@ class Session:
         self.connection_status = 'Preview only - no servo connection' if link is None else 'Disconnected; R to connect'
         self._next_send = 0.0
         self.control_mode = 'tracking'
-        self._release_until = None
-
-    @property
-    def servos_released(self):
-        return self._release_until is not None
-
-    def _restore_outputs(self):
-        if self.link and self.connected:
-            try:
-                self.link.resume()
-                self.link.send_pose(self.controller.angles)
-            except LinkError as error:
-                self._fault(error)
-
-    def tick(self, now):
-        """End the output-release countdown even without camera observations."""
-        if self.servos_released and now >= self._release_until:
-            self._release_until = None
-            self._restore_outputs()
-            self._next_send = now + 1 / self.config.send_hz
 
     def _fault(self, error):
         self.connected = False
@@ -52,9 +32,7 @@ class Session:
             self.controller.sync_angles(self.link.connect())
             self.connected = True
             self.connection_status = f'Connected: {self.link.port}' if hasattr(self.link, 'port') else 'Connected'
-            if self.servos_released:
-                self.link.off()
-            elif self.controller.active:
+            if self.controller.active:
                 self.link.resume()
                 self.link.send_pose(self.controller.angles)
         except LinkError as error:
@@ -74,12 +52,6 @@ class Session:
     def calibrate(self, now):
         self.control_mode = 'tracking'
         self.controller.begin_calibration(now, delay=4.0)
-        self._release_until = now + 4.0
-        if self.link and self.connected:
-            try:
-                self.link.off()
-            except LinkError as error:
-                self._fault(error)
 
     def use_tracking(self, now):
         self.control_mode = 'tracking'
@@ -93,12 +65,8 @@ class Session:
             raise ValueError('servo pin must be GPIO6..GPIO9')
         self.controller.nudge(pin - 6, delta)
         self.control_mode = 'keyboard'
-        released = self.servos_released
-        self._release_until = None
         if not self.controller.active:
             self.resume(now)
-        elif released:
-            self._restore_outputs()
         elif self.link and self.connected:
             try:
                 self.link.send_pose(self.controller.angles)
@@ -124,16 +92,19 @@ class Session:
         self.controller.resume(now, capture_reference=self.control_mode == 'tracking')
         if self.control_mode == 'keyboard':
             self.controller.status = 'Keyboard control - M for tracking'
-        if not self.servos_released:
-            self._restore_outputs()
+        if self.link and self.connected:
+            try:
+                self.link.resume()
+                self.link.send_pose(self.controller.angles)
+            except LinkError as error:
+                self._fault(error)
         self._next_send = now + 1 / self.config.send_hz
         return True
 
     def step(self, observation: Observation, now):
-        self.tick(now)
         if self.control_mode == 'tracking':
             self.controller.update(observation, now)
-        if self.controller.active and not self.servos_released and now >= self._next_send:
+        if self.controller.active and now >= self._next_send:
             if self.link and self.connected:
                 try:
                     self.link.send_pose(self.controller.angles)

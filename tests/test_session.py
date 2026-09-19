@@ -32,11 +32,6 @@ class Device:
         self.commands.append('hold')
         return (91, 92, 93, 94)
 
-    def off(self):
-        self.commands.append('off')
-        if self.fail:
-            raise LinkError('USB unplugged')
-
     def send_pose(self, angles):
         if self.fail:
             raise LinkError('USB unplugged')
@@ -47,6 +42,34 @@ class Device:
 
 
 class SessionTests(unittest.TestCase):
+    def test_calibration_keeps_keyboard_position_powered_and_sets_it_as_zero(self):
+        for running in (False, True):
+            with self.subTest(running=running):
+                device = Device()
+                session = Session(Config(), device)
+                session.connect()
+                for pin, delta in ((6,28), (7,-14), (8,21), (9,-35)):
+                    session.nudge(pin, delta, 0)
+                if not running:
+                    session.pause()
+                angles = session.controller.angles
+                device.commands.clear()
+                session.calibrate(1)
+                self.assertEqual(device.commands, [])
+                for now in (1, 2, 3, 4.99):
+                    session.step(Observation(-45,40,20,.6), now)
+                    self.assertEqual(session.controller.angles, angles)
+                    self.assertFalse(session.controller.calibrated)
+                session.step(Observation(-45,40,20,.6), 5)
+                session.step(Observation(-45,40,20,.6), 5.1)
+                self.assertTrue(session.controller.calibrated)
+                self.assertEqual(session.controller.active, running)
+                self.assertEqual(session.controller.angles, angles)
+                self.assertEqual(session.controller.positions, (0,)*4)
+                self.assertTrue(all(command == angles for command in device.commands))
+                session.nudge(8, 7, 5.2)
+                self.assertEqual(session.controller.positions, (0,0,7,0))
+
     def prepare(self, device=None):
         session = Session(Config(), device)
         if device:
@@ -69,7 +92,7 @@ class SessionTests(unittest.TestCase):
         session.step(Observation(-45,90,60,.2), 4.0)
         self.assertTrue(session.controller.calibrated)
         self.assertFalse(session.controller.active)
-        self.assertEqual(device.commands, ['hello', 'off', 'resume', (90,)*4])
+        self.assertEqual(device.commands, ['hello'])
 
     def test_countdown_survives_missing_hands_and_restarts_on_c(self):
         session = Session(Config())
@@ -91,7 +114,7 @@ class SessionTests(unittest.TestCase):
         session = self.prepare(device)
         self.assertTrue(session.controller.calibrated)
         self.assertFalse(session.controller.active)
-        self.assertEqual(device.commands, ['hello', 'off', 'resume', (90,)*4])
+        self.assertEqual(device.commands, ['hello'])
 
     def test_pause_syncs_held_firmware_output_and_preserves_calibration(self):
         device = Device()
@@ -205,115 +228,23 @@ class SessionTests(unittest.TestCase):
         self.assertTrue(session.controller.active)
         self.assertEqual(device.commands, [])
 
-    def test_calibration_while_active_releases_outputs_without_changing_active_intent(self):
+    def test_calibration_while_active_holds_angles_without_changing_active_intent(self):
         device = Device()
         session = self.prepare(device)
         session.resume(1.11)
         session.step(Observation(-60,30,20,.2), 1.2)
         angles = session.controller.angles
         session.calibrate(1.3)
-        self.assertEqual(device.commands[-1], 'off')
-        after_off = list(device.commands)
         self.assertTrue(session.controller.active)
         for tick in range(13, 53):
             session.step(Observation(-45,80,45,.2), tick / 10)
             self.assertTrue(session.controller.active)
             self.assertEqual(session.controller.angles, angles)
-            self.assertEqual(device.commands, after_off)
         session.step(Observation(-45,80,45,.2), 5.3)
         self.assertTrue(session.controller.calibrated)
         self.assertTrue(session.controller.active)
         self.assertEqual(session.controller.angles, angles)
         self.assertNotIn('hold', device.commands)
-        self.assertEqual(device.commands[-2:], ['resume', angles])
-
-    def test_release_ends_after_four_seconds_even_without_camera_or_hands(self):
-        for running in (False, True):
-            with self.subTest(running=running):
-                device = Device()
-                session = self.prepare(device)
-                if running:
-                    session.resume(2)
-                session.calibrate(3)
-                before = list(device.commands)
-                session.tick(6.999)
-                self.assertTrue(session.servos_released)
-                self.assertEqual(device.commands, before)
-                session.tick(7)
-                self.assertFalse(session.servos_released)
-                self.assertEqual(session.controller.active, running)
-                self.assertEqual(device.commands[-2:], ['resume', (90,)*4])
-                session.tick(8)
-                self.assertEqual(len(device.commands), len(before)+2)
-
-    def test_space_during_countdown_changes_intent_without_enabling_outputs(self):
-        device = Device()
-        session = self.prepare(device)
-        session.calibrate(2)
-        before = list(device.commands)
-        session.resume(3)
-        session.step(NEUTRAL, 3.1)
-        self.assertTrue(session.controller.active)
-        self.assertEqual(device.commands, before)
-        session.pause()
-        self.assertEqual(device.commands[-1], 'hold')
-        session.tick(6)
-        self.assertFalse(session.controller.active)
-        self.assertEqual(device.commands[-2:], ['resume', (91,92,93,94)])
-
-    def test_repeated_calibration_restarts_release_countdown(self):
-        device = Device()
-        session = self.prepare(device)
-        session.calibrate(2)
-        session.calibrate(4)
-        before = list(device.commands)
-        session.tick(6)
-        self.assertTrue(session.servos_released)
-        self.assertEqual(device.commands, before)
-        session.tick(8)
-        self.assertFalse(session.servos_released)
-
-    def test_keyboard_cancels_countdown_and_restores_outputs_before_moving(self):
-        for running in (False, True):
-            with self.subTest(running=running):
-                device = Device()
-                session = self.prepare(device)
-                if running:
-                    session.resume(2)
-                session.calibrate(3)
-                session.nudge(6, 7, 4)
-                self.assertFalse(session.servos_released)
-                self.assertFalse(session.controller.calibrating)
-                self.assertTrue(session.controller.active)
-                self.assertEqual(device.commands[-2:], ['resume', (97,90,90,90)])
-                before = list(device.commands)
-                session.tick(7)
-                self.assertEqual(device.commands, before)
-
-    def test_reconnect_during_countdown_releases_outputs_again(self):
-        device = Device()
-        session = self.prepare(device)
-        session.resume(2)
-        session.calibrate(3)
-        session.connect()
-        self.assertEqual(device.commands[-3:], ['close', 'hello', 'off'])
-        self.assertTrue(session.controller.active)
-        session.tick(7)
-        self.assertEqual(device.commands[-2:], ['resume', (90,)*4])
-
-    def test_release_and_restore_failures_preserve_run_intent(self):
-        for fail_stage in ('off', 'restore'):
-            with self.subTest(fail_stage=fail_stage):
-                device = Device()
-                session = self.prepare(device)
-                session.resume(2)
-                device.fail = fail_stage == 'off'
-                session.calibrate(3)
-                device.fail = True
-                session.tick(7)
-                self.assertFalse(session.connected)
-                self.assertTrue(session.controller.active)
-                self.assertEqual(device.commands[-1], 'close')
 
     def test_missing_channels_hold_only_their_own_angles(self):
         session = self.prepare()

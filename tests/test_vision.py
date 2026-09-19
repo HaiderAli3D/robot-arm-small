@@ -80,12 +80,44 @@ class VisionTests(unittest.TestCase):
         self.assertFalse(matches)
         self.assertEqual((obs.rotation, obs.elbow, obs.wrist, obs.pinch), (None,)*4)
 
-    def test_nonfinite_hand_is_missing(self):
+    def test_nonfinite_pinch_tip_does_not_discard_wrist_control(self):
         pose, hands = fixture()
         hands.hand_landmarks[0][8].x = math.nan
         obs, matches = observation_from_results(pose, hands, 1000, 500, .6)
+        self.assertIn('right', matches)
+        self.assertIsNone(obs.pinch)
+        self.assertIsNotNone(obs.wrist)
+
+    def test_nonfinite_hand_wrist_cannot_be_assigned(self):
+        pose, hands = fixture()
+        hands.hand_landmarks[0][0].x = math.nan
+        obs, matches = observation_from_results(pose, hands, 1000, 500)
         self.assertNotIn('right', matches)
         self.assertIsNone(obs.pinch)
+        self.assertIsNone(obs.wrist)
+
+    def test_moderately_visible_pose_wrists_keep_hand_controls(self):
+        pose, hands = fixture()
+        for index in (12, 14, 15, 16):
+            pose.pose_landmarks[0][index].visibility = .45
+            pose.pose_landmarks[0][index].presence = .45
+        obs, matches = observation_from_results(pose, hands, 1000, 500)
+        self.assertEqual(matches, {'right': 0, 'left': 1})
+        self.assertTrue(all(value is not None for value in
+                            (obs.rotation, obs.elbow, obs.wrist, obs.pinch)))
+
+    def test_clear_wrist_match_survives_pose_estimate_offset(self):
+        pose, hands = fixture()
+        pose.pose_landmarks[0][16].x = .53
+        obs, matches = observation_from_results(pose, hands, 1000, 500)
+        self.assertEqual(matches, {'right': 0, 'left': 1})
+        self.assertIsNotNone(obs.wrist)
+
+    def test_ambiguous_overlapping_wrists_are_not_assigned(self):
+        pose, hands = fixture()
+        pose.pose_landmarks[0][15].x = .7
+        _, matches = observation_from_results(pose, hands, 1000, 500)
+        self.assertFalse(matches)
 
     def test_uncertain_handedness_does_not_hide_pose_associated_hand(self):
         pose, hands = fixture()
@@ -101,12 +133,40 @@ class VisionTests(unittest.TestCase):
         self.assertIn('right', matches)
         self.assertIsNotNone(obs.wrist)
 
-    def test_hand_far_outside_image_is_still_rejected(self):
+    def test_unused_fingertip_outside_image_keeps_hand_controls(self):
         pose, hands = fixture()
         hands.hand_landmarks[0][20].x = 1.2
         obs, matches = observation_from_results(pose,hands,1000,500,.6)
-        self.assertNotIn('right', matches)
+        self.assertIn('right', matches)
+        self.assertIsNotNone(obs.wrist)
+        self.assertIsNotNone(obs.pinch)
+
+    def test_pinch_tip_outside_image_only_drops_pinch(self):
+        pose, hands = fixture()
+        hands.hand_landmarks[0][8].x = 1.2
+        obs, matches = observation_from_results(pose, hands, 1000, 500)
+        self.assertIn('right', matches)
+        self.assertIsNotNone(obs.wrist)
+        self.assertIsNone(obs.pinch)
+
+    def test_invalid_middle_knuckle_only_drops_wrist_and_rotation(self):
+        pose, hands = fixture()
+        for hand in hands.hand_landmarks:
+            hand[9].x = math.inf
+        obs, matches = observation_from_results(pose, hands, 1000, 500)
+        self.assertEqual(matches, {'right': 0, 'left': 1})
         self.assertIsNone(obs.wrist)
+        self.assertIsNone(obs.rotation)
+        self.assertIsNotNone(obs.pinch)
+        self.assertIsNotNone(obs.elbow)
+
+    def test_nonfinite_unused_fingertip_does_not_drop_controls(self):
+        pose, hands = fixture()
+        hands.hand_landmarks[0][20].x = math.nan
+        obs, matches = observation_from_results(pose, hands, 1000, 500)
+        self.assertIn('right', matches)
+        self.assertIsNotNone(obs.wrist)
+        self.assertIsNotNone(obs.pinch)
 
 
 if __name__ == '__main__':
