@@ -40,6 +40,7 @@ class Config:
     loss_timeout: float = 0.5
     calibration_seconds: float = 1.0
     confidence: float = 0.6
+    hand_confidence: float = 0.35
     camera: int = 0
     width: int = 960
     height: int = 720
@@ -56,7 +57,7 @@ class Config:
             ('pinch_closed_ratio', 0, 0.39), ('smoothing_tau', 0, 2),
             ('deadband', 0, 10), ('max_speed', 0.1, 90),
             ('loss_timeout', 0.05, 0.5), ('calibration_seconds', 0.05, 10),
-            ('confidence', 0.1, 1), ('send_hz', 5, 30),
+            ('confidence', 0.1, 1), ('hand_confidence', 0.1, 1), ('send_hz', 5, 30),
         ):
             _number(name, getattr(self, name), low, high)
         for name, low, high in (('camera', 0, 100), ('width', 160, 3840), ('height', 120, 2160)):

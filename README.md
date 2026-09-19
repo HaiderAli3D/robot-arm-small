@@ -37,6 +37,10 @@ The large status banner shows green **RUNNING** when the arm follows you, amber 
 
 Calibration allows up to 20 degrees of elbow/wrist departure from straight, but requires a steady pose. Large movement restarts the one-second capture. Input angles and tracking status help diagnose a missing or unstable control. Rotating the whole right forearm without bending the wrist does not change the wrist's relative angle.
 
+If calibration waits, follow the prominent instruction beneath the banner: it identifies the missing hand/joint, excessive elbow or wrist bend, or insufficient thumb/index separation. Keep both entire hands, including fingertips, inside the image and apart from each other. **Hold steady: 0–100%** shows capture progress; a restart names the measurement that changed. Calibration stays paused until you press Space.
+
+Hand sensitivity is set separately with `hand_confidence = 0.35` in `config.toml` (previously 0.6). Lower thresholds make detection more permissive and can also admit less reliable detections. The settings control MediaPipe's detection, presence, and tracking thresholds; see the [official Hand Landmarker options](https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker/python#configuration_options). Pose confidence remains 0.6. Left/right ownership comes from the arm positions, so uncertain handedness labels no longer discard otherwise usable hands. A 5% image-edge margin tolerates slightly clipped fingertips while keeping the wrist inside the image.
+
 ## Firmware and USB
 
 The original sketch identifies a **Waveshare ESP32-C5-WIFI6-KIT-N16R4**. Use the USB-C connector labelled **UART**, and close Arduino Serial Monitor before running the app.

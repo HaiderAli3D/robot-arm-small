@@ -86,6 +86,34 @@ class ControllerTests(unittest.TestCase):
         c.update(NEUTRAL, 2)
         self.assertFalse(c.calibrated)
 
+    def test_calibration_explains_each_rejected_measurement(self):
+        cases = (
+            (Observation(None,0,0,1), 'left hand'),
+            (Observation(0,None,0,1), 'right shoulder'),
+            (Observation(0,0,None,1), 'right wrist'),
+            (Observation(0,0,0,None), 'right palm'),
+            (Observation(0,35,0,1), '35'),
+            (Observation(0,0,-30,1), '30'),
+            (Observation(0,0,0,.3), 'thumb and index'),
+        )
+        for observation, explanation in cases:
+            with self.subTest(observation=observation):
+                c = Controller(Config())
+                c.begin_calibration(0)
+                c.update(observation, 0)
+                self.assertIn(explanation, c.status)
+                self.assertFalse(c.calibrated)
+
+    def test_calibration_reports_progress_and_reason_for_restart(self):
+        c = Controller(Config())
+        c.begin_calibration(0)
+        for tick in range(6):
+            c.update(NEUTRAL, tick / 10)
+        self.assertIn('50%', c.status)
+        c.update(Observation(25,0,0,1), .6)
+        self.assertIn('left hand moved', c.status)
+        self.assertIn('0%', c.status)
+
     def test_slew_rate_and_smoothing(self):
         c = calibrated(Config(smoothing_tau=0, deadband=0, max_speed=30))
         self.assertAlmostEqual(c.update(Observation(90, 90, 90, 0.2), 1.2)[0], 93)

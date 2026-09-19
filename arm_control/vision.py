@@ -45,9 +45,11 @@ def observation_from_results(pose_result, hand_result, width, height, confidence
               if _visible(pose[index], confidence)}
     valid = []
     for index, hand in enumerate(hand_result.hand_landmarks):
-        categories = hand_result.handedness[index] if index < len(hand_result.handedness) else []
-        if (len(hand) == 21 and categories and categories[0].score >= confidence
-                and all(_finite(p) and 0 <= p.x <= 1 and 0 <= p.y <= 1 for p in hand)):
+        # Handedness score measures left/right classification, not detection.
+        # Ownership is assigned from pose wrists below. Permit a small border
+        # margin so one clipped fingertip does not discard the whole hand.
+        if (len(hand) == 21 and 0 <= hand[0].x <= 1 and 0 <= hand[0].y <= 1
+                and all(_finite(p) and -.05 <= p.x <= 1.05 and -.05 <= p.y <= 1.05 for p in hand)):
             valid.append(index)
     assignment = associate_hands(wrists, [normalized(hand_result.hand_landmarks[i][0]) for i in valid],
                                  max_distance=.12, ambiguity_margin=.035)
@@ -97,8 +99,8 @@ class Tracker:
             self.hands = vision.HandLandmarker.create_from_options(vision.HandLandmarkerOptions(
                 base_options=BaseOptions(model_asset_path=str(models / 'hand_landmarker.task')),
                 running_mode=vision.RunningMode.VIDEO, num_hands=2,
-                min_hand_detection_confidence=config.confidence,
-                min_hand_presence_confidence=config.confidence, min_tracking_confidence=config.confidence))
+                min_hand_detection_confidence=config.hand_confidence,
+                min_hand_presence_confidence=config.hand_confidence, min_tracking_confidence=config.hand_confidence))
         except Exception:
             self.pose.close()
             raise

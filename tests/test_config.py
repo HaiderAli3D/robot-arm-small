@@ -17,6 +17,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.claw_open, 90)
         self.assertEqual(len(config.joints), 4)
         self.assertLessEqual(config.max_speed, 90)
+        self.assertEqual(config.hand_confidence, .35)
 
     def test_user_joint_override_preserves_other_defaults(self):
         config = self.load('[joints.gpio6]\ndirection=-1\ngain=0.5\nminimum=40\nmaximum=140\n')
@@ -26,6 +27,7 @@ class ConfigTests(unittest.TestCase):
     def test_rejects_invalid_or_misspelled_configuration(self):
         for text in ('max_speed=100', 'send_hz=100', 'camera=true', 'smoothing_tau=nan',
                      'deadband=-1', 'loss_timeout=1', 'unknown=3', 'claw_open=0',
+                     'hand_confidence=0', 'hand_confidence=nan',
                      '[joints.gpio6]\nminimum=100', '[joints.gpio8]\ndirection=0',
                      '[joints.gpio9]\nminimum=30\n', '[joints.gpio5]\ngain=1',
                      '[joints.gpio7]\nminimun=4', 'joints=[]'):

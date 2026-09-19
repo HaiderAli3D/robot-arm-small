@@ -48,3 +48,11 @@ The preceding sections record the initial implementation checks. Subsequently, a
 - Camera 1 displayed live video with both hand overlays and arm landmarks. The observed frame supplied all four control values, with 47 ms inference and 63 ms frame age. This is a single observed frame, not a performance benchmark. The app remains open for operator calibration and control.
 
 The camera change is local to the Python app; no additional firmware upload was needed. Mechanical alignment, endpoint suitability, and actual gesture-to-servo motion still require operator validation. Camera screenshots and runtime logs remain in ignored local `artifacts/` and are not committed.
+
+## Follow-up: calibration feedback and hand sensitivity
+
+- Added distinct calibration messages for missing controls, excessive elbow/wrist bend, and insufficient thumb/index separation. Capture progress and the specific stability-reset cause are now visible. The four-second countdown and explicit Space-to-start behavior are retained.
+- Fixed hand filtering that treated left/right classification confidence as detection confidence, even though ownership is determined from pose wrists. Slightly clipped fingertips are accepted within a 5% image margin; the wrist must stay inside the image and all landmarks must remain finite.
+- Split hand model thresholds from pose confidence: hand detection/presence/tracking now use configurable `hand_confidence = 0.35`; pose confidence remains 0.6. These more permissive settings need operator assessment for detection quality and false positives.
+- All **105 Python tests** pass, including regression cases for clipped fingertips, uncertain handedness, rejected outliers, calibration guidance, countdown and calibration progress. Restarted the actual models and GUI on camera 1 with the COM70 connection confirmed.
+- Successful operator calibration under the new settings has not yet been observed. The changes expose remaining pose/tracking blockers rather than silently relaxing the neutral-pose requirements.

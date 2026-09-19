@@ -131,23 +131,40 @@ class Controller:
             remaining = math.ceil(self._calibration_ready_at - now)
             self.status = f"Calibration starts in {remaining} seconds - show both hands"
             return
-        if (any(v is None for v in values) or abs(values[1]) > 20
-                or abs(_relative(values[2], 0)) > 20
-                or values[3] <= max(0.4, self.config.pinch_closed_ratio)):
+        missing_help = ('Show your left hand with fingers visible',
+                        'Show your right shoulder, elbow and wrist',
+                        'Show your right wrist and hand; keep them in view',
+                        'Face your right palm toward the camera; show thumb and index')
+        problem = next((help_text for value, help_text in zip(values,missing_help)
+                        if value is None), None)
+        if problem is None:
+            if values[1] > 20:
+                problem = f'Straighten your right elbow: bend {values[1]:.0f} degrees (needs 20 or less)'
+            elif abs(_relative(values[2], 0)) > 20:
+                problem = f'Straighten your right wrist: bend {abs(_relative(values[2],0)):.0f} degrees (needs 20 or less)'
+            elif values[3] <= max(0.4, self.config.pinch_closed_ratio):
+                problem = 'Spread your right thumb and index finger apart'
+        if problem:
             self._samples = []
-            self.status = "Calibration needs straight right arm and wrist, open hand, both hands visible"
+            self.status = problem
             return
+        restart = None
         if self._samples:
             anchor = self._samples[0][1]
-            stable = (abs(_relative(values[0], anchor[0])) <= 8
-                      and abs(values[1] - anchor[1]) <= 8
-                      and abs(_relative(values[2], anchor[2])) <= 8
-                      and abs(values[3] - anchor[3]) <= 0.12)
-            if not stable:
+            movement = (abs(_relative(values[0], anchor[0])) > 8,
+                        abs(values[1] - anchor[1]) > 8,
+                        abs(_relative(values[2], anchor[2])) > 8,
+                        abs(values[3] - anchor[3]) > 0.12)
+            restart = next((label for moved,label in zip(movement,
+                           ('left hand moved','right elbow moved','right wrist moved','finger spacing changed'))
+                            if moved), None)
+            if restart:
                 self._samples = []
         self._samples.append((now, values))
         elapsed = now - self._samples[0][0]
-        self.status = "Hold neutral pose steady to calibrate"
+        progress = min(100, round(100 * elapsed / self.config.calibration_seconds))
+        self.status = (f'Hold steady: {progress}%' if restart is None
+                       else f'Restarted: {restart} - hold steady: 0%')
         if elapsed + 1e-9 < self.config.calibration_seconds:
             return
         columns = list(zip(*(sample for _, sample in self._samples)))
@@ -156,7 +173,7 @@ class Controller:
         self.calibrated = True
         self._calibrating = False
         self._samples = []
-        self.status = "Calibrated; resume to move"
+        self.status = "Calibrated - press SPACE to start"
 
     def update(self, observation: Observation, now: float) -> tuple[float, ...]:
         self._time(now)

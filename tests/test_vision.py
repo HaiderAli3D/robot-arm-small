@@ -66,12 +66,26 @@ class VisionTests(unittest.TestCase):
         self.assertNotIn('right', matches)
         self.assertIsNone(obs.pinch)
 
-    def test_low_hand_confidence_is_missing(self):
+    def test_uncertain_handedness_does_not_hide_pose_associated_hand(self):
         pose, hands = fixture()
         hands.handedness[0][0].score = .51
         obs, _ = observation_from_results(pose, hands, 1000, 500, .6)
-        self.assertIsNone(obs.wrist)
+        self.assertIsNotNone(obs.wrist)
         self.assertIsNotNone(obs.rotation)
+
+    def test_fingertip_just_outside_image_keeps_hand_tracking(self):
+        pose, hands = fixture()
+        hands.hand_landmarks[0][20].x = 1.02
+        obs, matches = observation_from_results(pose,hands,1000,500,.6)
+        self.assertIn('right', matches)
+        self.assertIsNotNone(obs.wrist)
+
+    def test_hand_far_outside_image_is_still_rejected(self):
+        pose, hands = fixture()
+        hands.hand_landmarks[0][20].x = 1.2
+        obs, matches = observation_from_results(pose,hands,1000,500,.6)
+        self.assertNotIn('right', matches)
+        self.assertIsNone(obs.wrist)
 
 
 if __name__ == '__main__':
