@@ -131,6 +131,24 @@ class AppCameraTests(unittest.TestCase):
         self.assertTrue(result.states[3][1])
         self.assertTrue(result.states[-1][1])
 
+    def test_servo_keys_address_all_four_pins_without_a_camera(self):
+        result = self.exercise([ord(k) for k in 'wtupq'],failed_first=True)
+        self.assertEqual(result.session.controller.angles,(85,85,85,85))
+        self.assertEqual(result.session.control_mode,'keyboard')
+        self.assertEqual([active for active,_ in result.states],[False,True,True,True,True])
+
+    def test_uppercase_and_increment_keys_restore_all_four_angles(self):
+        result = self.exercise([ord(k) for k in 'WTUPEYI[q'])
+        self.assertEqual(result.session.controller.angles,(90,)*4)
+        self.assertEqual(result.session.control_mode,'keyboard')
+
+    def test_tracking_does_not_overwrite_keyboard_and_m_restores_tracking(self):
+        result = self.exercise([ord('e'),-1,-1,ord('q')])
+        self.assertEqual(result.session.controller.angles,(95,90,90,90))
+        result = self.exercise([ord('e'),ord('m'),-1,ord('q')])
+        self.assertEqual(result.session.control_mode,'tracking')
+        self.assertTrue(result.session.controller.calibrated)
+
 
 if __name__ == '__main__':
     unittest.main()

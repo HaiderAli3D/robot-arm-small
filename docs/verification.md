@@ -78,3 +78,9 @@ Final verification: **118 Python tests** and native firmware tests pass. GUI reg
 Changed the host mapping at the user's request: GPIO7 now follows right wrist bend and GPIO8 follows right elbow bend. GPIO6 rotation and GPIO9 claw remain assigned as before. The UI now labels the pin associated with each input. Increased the supplied GPIO9 gain from 1 to 2: with the configured pinch endpoints, ratios 1.0, 0.8, and 0.6 command claw targets 90, 45, and 0 degrees respectively before smoothing.
 
 All **120 Python tests** pass. Independent elbow-only and wrist-only input tests verify output order; missing-input and per-pin gain/direction tests use the revised mapping. The claw regression loads the actual project configuration and verifies doubled response, full closure, and reopening. Firmware is unchanged; this host-side mapping update requires only restarting the app.
+
+## Follow-up: keyboard servo control
+
+Added W/E for IO6, T/Y for IO7, U/I for IO8, and P/[ for IO9; the first key decreases and the second increases by five nominal degrees. A servo key selects keyboard mode, starts control, and sends immediately. Camera observations cannot change targets in keyboard mode. M returns to tracking, C selects tracking and calibrates, and Space pauses/resumes either mode. Keyboard control works without camera detection/calibration and survives reconnects.
+
+All **134 Python tests** pass, including all eight keys, uppercase input, actual pin order, direct increments independent of tracking gain, immediate serial sends, camera isolation, manual pause/resume, offline/reconnect behavior, and transitions back to tracking. Restarted the full app on COM70 and camera 1. Firmware is unchanged.

@@ -1,6 +1,6 @@
 import unittest
 
-from arm_control.config import Config
+from arm_control.config import Config, JointConfig
 from arm_control.control import Observation
 from arm_control.session import Session
 from arm_control.transport import LinkError
@@ -287,6 +287,165 @@ class SessionTests(unittest.TestCase):
         self.assertFalse(session.controller.active)
         self.assertFalse(session.connected)
         self.assertEqual(device.commands[-1], 'close')
+
+    def test_keyboard_nudges_each_physical_pin_without_camera_or_calibration(self):
+        for pin, want in ((6, (95,90,90,90)), (7, (90,95,90,90)),
+                          (8, (90,90,95,90)), (9, (90,90,90,95))):
+            with self.subTest(pin=pin):
+                session = Session(Config())
+                session.nudge(pin, 5, 0)
+                self.assertEqual(session.control_mode, 'keyboard')
+                self.assertTrue(session.controller.active)
+                self.assertFalse(session.controller.calibrated)
+                self.assertEqual(session.controller.angles, want)
+                session.nudge(pin, -5, .01)
+                self.assertEqual(session.controller.angles, (90,)*4)
+
+    def test_keyboard_direct_angles_ignore_tracking_gain_direction_and_respect_limits(self):
+        config = Config(joints=(JointConfig(minimum=88, maximum=93, direction=-1, gain=2),
+                                JointConfig(), JointConfig(), JointConfig()))
+        session = Session(config)
+        session.nudge(6, 5, 0)
+        self.assertEqual(session.controller.angles, (93,90,90,90))
+        session.nudge(6, -5, .01)
+        self.assertEqual(session.controller.angles, (88,90,90,90))
+        session.nudge(6, -5, .02)
+        self.assertEqual(session.controller.angles, (88,90,90,90))
+
+    def test_keyboard_nudges_send_immediately_even_inside_camera_send_interval(self):
+        device = Device()
+        session = Session(Config(), device)
+        session.connect()
+        session.nudge(6, 5, 0)
+        self.assertEqual(device.commands[-1], (95,90,90,90))
+        before = len(device.commands)
+        session.nudge(6, 5, .001)
+        self.assertIn((100,90,90,90), device.commands[before:])
+        self.assertEqual(session.controller.angles, (100,90,90,90))
+
+    def test_keyboard_targets_are_not_overwritten_by_camera_frames_or_camera_loss(self):
+        session = self.prepare()
+        session.nudge(6, 5, 1.2)
+        session.nudge(9, -5, 1.21)
+        angles = session.controller.angles
+        session.frame(Observation(-30,80,60,.2), captured_at=1.3, now=1.3)
+        session.step(Observation(-60,40,30,.3), 1.4)
+        session.camera_missing(2)
+        session.prepare_camera_switch()
+        self.assertEqual(session.controller.angles, angles)
+        self.assertEqual(session.control_mode, 'keyboard')
+        self.assertTrue(session.controller.active)
+        self.assertTrue(session.controller.calibrated)
+
+    def test_keyboard_pause_resume_needs_no_calibration_and_uses_actual_held_angles(self):
+        device = Device()
+        session = Session(Config(), device)
+        session.connect()
+        session.nudge(6, 5, 0)
+        session.pause()
+        self.assertEqual(session.control_mode, 'keyboard')
+        self.assertFalse(session.controller.active)
+        self.assertEqual(session.controller.angles, (91,92,93,94))
+        self.assertTrue(session.resume(.1))
+        self.assertTrue(session.controller.active)
+        self.assertFalse(session.controller.calibrated)
+        self.assertEqual(session.control_mode, 'keyboard')
+        self.assertEqual(device.commands[-1], (91,92,93,94))
+        session.camera_missing(.2)
+        self.assertEqual(session.controller.angles, (91,92,93,94))
+
+    def test_keyboard_key_after_pause_starts_and_nudges_actual_held_position(self):
+        device = Device()
+        session = Session(Config(), device)
+        session.connect()
+        session.nudge(6, 5, 0)
+        session.pause()
+        session.nudge(7, 5, .1)
+        self.assertTrue(session.controller.active)
+        self.assertEqual(session.controller.angles, (91,97,93,94))
+        self.assertEqual(device.commands[-1], (91,97,93,94))
+
+    def test_keyboard_offline_changes_do_not_require_or_open_serial(self):
+        device = Device()
+        session = Session(Config(), device)
+        session.nudge(8, -5, 0)
+        session.camera_missing(10)
+        self.assertEqual(session.controller.angles, (90,90,85,90))
+        self.assertEqual(session.control_mode, 'keyboard')
+        self.assertTrue(session.controller.active)
+        self.assertFalse(session.connected)
+        self.assertFalse(session.controller.calibrated)
+        self.assertEqual(device.commands, [])
+
+    def test_keyboard_send_failure_and_reconnect_preserve_mode_and_run_intent(self):
+        device = Device()
+        session = Session(Config(), device)
+        session.connect()
+        device.fail = True
+        session.nudge(6, 5, 0)
+        self.assertFalse(session.connected)
+        self.assertEqual(session.control_mode, 'keyboard')
+        self.assertTrue(session.controller.active)
+        device.fail = False
+        device.connect_angles = (70,80,90,100)
+        before = len(device.commands)
+        session.connect()
+        self.assertTrue(session.connected)
+        self.assertEqual(session.control_mode, 'keyboard')
+        self.assertTrue(session.controller.active)
+        self.assertEqual(session.controller.angles, (70,80,90,100))
+        self.assertIn('resume', device.commands[before:])
+        session.nudge(6, 5, .1)
+        self.assertEqual(device.commands[-1], (75,80,90,100))
+
+    def test_use_tracking_preserves_existing_reference_and_active_or_paused_state(self):
+        for paused in (False, True):
+            with self.subTest(paused=paused):
+                session = self.prepare()
+                session.nudge(6, 5, 1.2)
+                if paused:
+                    session.pause()
+                before = session.controller.angles
+                session.use_tracking(1.3)
+                self.assertEqual(session.control_mode, 'tracking')
+                self.assertEqual(session.controller.active, not paused)
+                self.assertTrue(session.controller.calibrated)
+                self.assertEqual(session.controller.angles, before)
+                session.frame(Observation(-40,60,50,.2), captured_at=1.4, now=1.4)
+                if paused:
+                    self.assertEqual(session.controller.angles, before)
+                else:
+                    self.assertGreater(session.controller.angles[0], before[0])
+
+    def test_tracking_after_uncalibrated_keyboard_captures_reference_without_manual_calibration(self):
+        session = Session(Config())
+        session.nudge(6, 5, 0)
+        session.use_tracking(.1)
+        self.assertTrue(session.controller.active)
+        self.assertEqual(session.control_mode, 'tracking')
+        session.frame(NEUTRAL, captured_at=.2, now=.2)
+        self.assertTrue(session.controller.calibrated)
+        session.frame(Observation(-40,60,50,.2), captured_at=.3, now=.3)
+        self.assertGreater(session.controller.angles[0], 95)
+
+    def test_calibrate_from_keyboard_selects_tracking_and_preserves_run_state(self):
+        for paused in (False, True):
+            with self.subTest(paused=paused):
+                session = Session(Config())
+                session.nudge(6, 5, 0)
+                if paused:
+                    session.pause()
+                angles = session.controller.angles
+                session.calibrate(.1)
+                self.assertEqual(session.control_mode, 'tracking')
+                self.assertEqual(session.controller.active, not paused)
+                self.assertTrue(session.controller.calibrating)
+                session.step(NEUTRAL, 4.0)
+                self.assertEqual(session.controller.angles, angles)
+                self.assertFalse(session.controller.calibrated)
+                session.step(NEUTRAL, 4.1)
+                self.assertTrue(session.controller.calibrated)
+                self.assertEqual(session.controller.active, not paused)
 
 
 if __name__ == '__main__':

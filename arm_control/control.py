@@ -88,15 +88,27 @@ class Controller:
         self._filtered = list(self._angles)
         self.status = reason
 
-    def resume(self, now: float) -> bool:
+    def resume(self, now: float, *, capture_reference: bool = True) -> bool:
         self._time(now)
-        if not self.calibrated and not self._calibrating:
+        if capture_reference and not self.calibrated and not self._calibrating:
             self.begin_calibration(now)
         self.active = True
         self.status = "Running" if self.calibrated else "Running - waiting for a tracked reference pose"
         self._last_update = now
         self._filtered = list(self._angles)
         return True
+
+    def nudge(self, index: int, delta: float) -> None:
+        """Set one servo directly, independently of tracking gain/reference."""
+        if isinstance(index, bool) or index not in range(4):
+            raise ValueError('servo index must be 0..3')
+        if not math.isfinite(delta):
+            raise ValueError('servo increment must be finite')
+        joint = self.config.joints[index]
+        angles = list(self.angles)
+        angles[index] = max(joint.minimum, min(joint.maximum, angles[index] + delta))
+        self.sync_angles(angles)
+        self._calibrating = False
 
     @staticmethod
     def _values(observation: Observation) -> tuple[float | None, ...]:

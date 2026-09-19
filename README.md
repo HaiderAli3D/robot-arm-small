@@ -35,6 +35,19 @@ Press **V** in the preview window to cycle to the next available camera. The app
 
 The large status banner shows your chosen mode: green **RUNNING** or amber **PAUSED**. Running remains selected through missing tracking, camera changes, calibration, and USB failures. The banner identifies disconnected USB or a pending reference separately. Blue **CALIBRATING** means you are setting a reference while paused. Space always toggles the mode, including while the camera is unavailable or switching.
 
+### Keyboard control
+
+Focus the preview window and use these keys. Each press changes the selected servo by **5 degrees**; holding a key uses your keyboard's normal repeat rate.
+
+| Servo | Decrease | Increase |
+|---|---|---|
+| IO6 | W | E |
+| IO7 | T | Y |
+| IO8 | U | I |
+| IO9 | P | [ |
+
+Pressing a servo key selects **keyboard control**, starts movement, and sends the new angle immediately. It works without hand detection or calibration. Camera gestures cannot overwrite keyboard positions. **Space** pauses/resumes; another servo key also resumes and moves. **M** selects tracking again while retaining your run/pause choice; **C** selects tracking and starts its four-second calibration countdown. Reconnecting retains keyboard mode. Keyboard steps are direct servo degrees, independent of tracking gain and direction, within the configured joint ranges. Uppercase letters work too.
+
 Calibration records the left-hand rotation, right-elbow bend, and right-wrist bend as software zero points. Subsequent changes from those angles control GPIO6–8 around 90 degrees. Any detected pose is accepted. A new reference takes effect automatically if running, or waits for Space if paused. Rotating the whole right forearm without bending the wrist does not change the wrist's relative angle.
 
 If calibration waits after the countdown, the instruction beneath the banner identifies a hand or joint the camera cannot currently track. Keep your right arm and both hands visible and apart. Missing or invalid tracking cannot supply a reference angle; your actual pose is never rejected for being bent or pinched.

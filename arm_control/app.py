@@ -10,6 +10,12 @@ from .session import Session
 
 WINDOW = 'Robot arm - MediaPipe'
 MISSING = Observation(None, None, None, None)
+SERVO_KEYS = {
+    ord('w'): (6,-5), ord('e'): (6,5),
+    ord('t'): (7,-5), ord('y'): (7,5),
+    ord('u'): (8,-5), ord('i'): (8,5),
+    ord('p'): (9,-5), ord('['): (9,5),
+}
 HAND_EDGES = ((0,1),(1,2),(2,3),(3,4),(0,5),(5,6),(6,7),(7,8),
               (5,9),(9,10),(10,11),(11,12),(9,13),(13,14),(14,15),(15,16),
               (13,17),(0,17),(17,18),(18,19),(19,20))
@@ -58,7 +64,7 @@ def _display(frame, pose, hands, matches, observation, session, inference_ms, fr
     if width != 960:
         display = cv2.resize(display, (960, round(height*960/width)))
     width = display.shape[1]
-    panel = cv2.copyMakeBorder(display, 0, 300, 0, 0, cv2.BORDER_CONSTANT, value=(25,28,28))
+    panel = cv2.copyMakeBorder(display, 0, 330, 0, 0, cv2.BORDER_CONSTANT, value=(25,28,28))
     top = display.shape[0]
     controller = session.controller
     if controller.active:
@@ -66,6 +72,8 @@ def _display(frame, pose, hands, matches, observation, session, inference_ms, fr
             state = 'RUNNING - preview only'
         elif not session.connected:
             state = 'RUNNING - USB disconnected'
+        elif session.control_mode == 'keyboard':
+            state = 'RUNNING - keyboard control'
         elif controller.calibrating:
             state = 'RUNNING - setting reference'
         else:
@@ -93,7 +101,8 @@ def _display(frame, pose, hands, matches, observation, session, inference_ms, fr
              inputs,
              f'{camera_status} | inference {inference_ms:.0f} ms | frame age {frame_age*1000:.0f} ms',
              'C calibrate   SPACE start/pause   V switch camera   R reconnect   Q / ESC quit',
-             'C saves any tracked pose after 4 seconds. Pinch always controls the claw.']
+             'Keys -/+ 5deg: W/E IO6   T/Y IO7   U/I IO8   P/[ IO9   M tracking',
+             f'Control: {session.control_mode}. Servo keys select keyboard control and move immediately.']
     for line in lines:
         for part in textwrap.wrap(line, max(70, int(width/8.2))):
             cv2.putText(panel, part, (14,y), cv2.FONT_HERSHEY_SIMPLEX, .52, (225,235,230), 1, cv2.LINE_AA)
@@ -132,7 +141,7 @@ def run(config, args):
             session.connect()
         if not args.headless:
             cv2.namedWindow(WINDOW, cv2.WINDOW_NORMAL)
-            cv2.resizeWindow(WINDOW, config.width, config.height+280)
+            cv2.resizeWindow(WINDOW, config.width, config.height+330)
         while True:
             was_switching = selector.switching
             selector.poll()
@@ -184,7 +193,13 @@ def run(config, args):
                 break
             if key in (27, ord('q'), ord('Q')):
                 break
-            if key in (ord('v'),ord('V')) and not selector.switching:
+            lower_key = key + 32 if ord('A') <= key <= ord('Z') else key
+            if lower_key in SERVO_KEYS:
+                pin, delta = SERVO_KEYS[lower_key]
+                session.nudge(pin,delta,time.monotonic())
+            elif key in (ord('m'),ord('M')):
+                session.use_tracking(time.monotonic())
+            elif key in (ord('v'),ord('V')) and not selector.switching:
                 session.prepare_camera_switch()
                 selector.request_next()
                 frame = pose = hands = None
