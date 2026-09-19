@@ -53,6 +53,12 @@ class Session:
         if self.connected:
             self.controller.begin_calibration(now)
 
+    def prepare_camera_switch(self):
+        """Hold before opening another camera; its coordinate reference is new."""
+        self.pause('Switching camera')
+        self.controller.reset(self.controller.angles)
+        self._last_capture = None
+
     def resume(self, now):
         if not self.connected or not self.controller.resume(now):
             return False

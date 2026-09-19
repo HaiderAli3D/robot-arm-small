@@ -25,6 +25,8 @@ Setup creates `.venv`, installs the locked Windows dependencies, and downloads t
 
 In the preview:
 
+Press **V** in the preview window to cycle to the next available camera. The app checks camera indices 0–3, skips unavailable devices, and keeps the current camera if no alternative is found. The window stays responsive while searching. Every switch attempt holds the arm and clears calibration; press **C**, then Space, after choosing a camera. Camera selection applies to the current run; change `camera` in `config.toml` to set the startup default.
+
 1. Keep one person in view, including the right shoulder, elbow, wrist, and both hands. Keep the hands apart so their arm associations are clear.
 2. Extend the right arm sideways so its wrist bend can be seen in the image. Keep its wrist straight and thumb/index open. Hold the left hand upright with fingers visible.
 3. Press **C**, hold that pose steadily for one second, and wait for **Calibrated**.
@@ -94,7 +96,7 @@ Quit and pause are software holds, not electrical emergency stops. `off` stops p
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test.ps1
 ```
 
-If the camera cannot open, check Windows **Privacy & security > Camera**, allow desktop apps, close competing camera apps, and select the appropriate index. Camo/virtual cameras may be different indices from the integrated webcam. Models run on the CPU; reduce resolution if the frame-age indicator approaches 500ms. The app retains only the latest captured frame to avoid a growing camera queue. Normal MediaPipe native-library warnings may appear on stderr.
+If the camera cannot open, press **V** in the window, check Windows **Privacy & security > Camera**, allow desktop apps, or close competing camera apps. The shortcut remains available even when the current camera has no feed. If your only camera failed to open, fix its permissions or competing app, then restart this app to retry it. Camo/virtual cameras may be different indices from the integrated webcam. Models run on the CPU; reduce resolution if the frame-age indicator approaches 500ms. The app retains only the latest captured frame to avoid a growing camera queue. Normal MediaPipe native-library warnings may appear on stderr.
 
 `requirements.txt` lists direct dependencies; `requirements-lock.txt` records the complete tested Python 3.12 Windows environment. Only one OpenCV package is installed. User-specific calibration is kept in memory and must be repeated after restart/reconnect. Editing config requires restarting the app.
 

@@ -36,3 +36,15 @@ The user supplied a newer `RELATIVE-CW-v4` sketch while work was in progress. It
 That relative-command sample is separate from the new absolute-angle tracking firmware. The tracking firmware must be uploaded before the Python app can communicate with it. The original sample remains outside the task's local Git commit.
 
 Physical checks still needed: confirm 90-degree horn alignment/open claw, servo polarity and mechanical endpoints, supply capacity and shared ground; upload tracking firmware; calibrate with the actual operator; test individual movements and tracking/USB-loss holds. Nominal software angles are not measured shaft positions. No claim of physical motion or electrical verification is made.
+
+## Follow-up: board upload and keyboard camera switching
+
+The preceding sections record the initial implementation checks. Subsequently, at the user's request:
+
+- Identified the connected board as ESP32-C5 revision 1.0 on COM70, uploaded the tracking firmware successfully, and verified flash hashes. The running firmware returned `ROBOT_ARM 1 90 90 90 90`; a hold command also reported all four nominal angles at 90.
+- Added **V** camera switching, with no on-screen button. Switching holds the arm, clears calibration, probes alternate cameras without blocking the preview loop, and rebuilds the landmark trackers. Unavailable alternatives retain the previous camera. An unavailable startup camera can be bypassed with V.
+- Passed **99 Python tests** and the native production firmware controller tests. An independent code review found no blocking issues.
+- Restarted the full app with `--port COM70`. Verified a native V key event changed the real preview from camera 0 to camera 1 while remaining connected and paused at 90 degrees on all four outputs.
+- Camera 1 displayed live video with both hand overlays and arm landmarks. The observed frame supplied all four control values, with 47 ms inference and 63 ms frame age. This is a single observed frame, not a performance benchmark. The app remains open for operator calibration and control.
+
+The camera change is local to the Python app; no additional firmware upload was needed. Mechanical alignment, endpoint suitability, and actual gesture-to-servo motion still require operator validation. Camera screenshots and runtime logs remain in ignored local `artifacts/` and are not committed.

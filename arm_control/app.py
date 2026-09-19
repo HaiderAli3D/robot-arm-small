@@ -69,7 +69,7 @@ def _display(frame, pose, hands, matches, observation, session, inference_ms, fr
     lines = [f'{state}   Commanded degrees: {angles}', controller.status, session.connection_status,
              inputs,
              f'{camera_status} | inference {inference_ms:.0f} ms | frame age {frame_age*1000:.0f} ms',
-             'C calibrate   SPACE start/pause   R reconnect   Q / ESC quit',
+             'C calibrate   SPACE start/pause   V switch camera   R reconnect   Q / ESC quit',
              'Neutral: straight right arm + wrist, thumb/index open, left hand upright.']
     for line in lines:
         for part in textwrap.wrap(line, max(70, int(width/8.2))):
@@ -80,12 +80,17 @@ def _display(frame, pose, hands, matches, observation, session, inference_ms, fr
 
 def run(config, args):
     import cv2
+    import numpy as np
     from .camera import Camera
+    from .camera_switch import CameraSwitcher
     from .transport import SerialLink
     from .vision import Tracker
 
     session = Session(config, None if args.dry_run else SerialLink(args.port))
     camera = tracker = None
+    selector = None
+    camera_failed = False
+    placeholder = np.zeros((config.height,config.width,3),dtype=np.uint8)
     processed = valid_frames = 0
     latencies = []
     frame = pose = hands = None
@@ -99,17 +104,38 @@ def run(config, args):
     try:
         tracker = Tracker(config, args.models)
         camera = Camera(config.camera, config.width, config.height).start()
+        selector = CameraSwitcher(camera,config.camera,config.width,config.height,camera_factory=Camera)
         if session.link:
             session.connect()
         if not args.headless:
             cv2.namedWindow(WINDOW, cv2.WINDOW_NORMAL)
             cv2.resizeWindow(WINDOW, config.width, config.height+205)
         while True:
-            captured = camera.latest(after=sequence, timeout=.03)
+            was_switching = selector.switching
+            selector.poll()
+            if was_switching and not selector.switching:
+                tracker.close()
+                tracker = Tracker(config,args.models)
+                camera = selector.camera
+                sequence = -1
+                last_capture = time.monotonic()
+                camera_failed = False
+            captured = None if selector.switching else camera.latest(after=sequence, timeout=.03)
             now = time.monotonic()
-            if camera.error:
-                raise RuntimeError(f'Camera: {camera.error}')
-            if captured is not None:
+            unavailable = camera.error or (now-last_capture > (10 if frame is None else 2))
+            if selector.switching:
+                camera_status = selector.status
+            elif unavailable:
+                if args.headless:
+                    raise RuntimeError(f'Camera: {camera.error or "stopped delivering frames"}')
+                if not camera_failed:
+                    session.prepare_camera_switch()
+                    camera_failed = True
+                frame = pose = hands = None
+                matches = {}
+                observation = MISSING
+                camera_status = f'Camera {selector.index} unavailable - press V to switch camera'
+            elif captured is not None:
                 sequence, last_capture, frame = captured.sequence, captured.captured_at, captured.image
                 inference_start = time.monotonic()
                 observation, matches, pose, hands = tracker.process(frame, last_capture)
@@ -121,27 +147,33 @@ def run(config, args):
                     observation = MISSING
                     camera_status = 'Frame too old; reduce resolution or check camera'
                 else:
-                    camera_status = f'Camera {config.camera}'
+                    camera_status = selector.status
                 valid_frames += int(all(value is not None for value in (
                     observation.rotation, observation.elbow, observation.wrist, observation.pinch)))
                 session.frame(observation, captured_at=last_capture, now=now)
-            elif now-last_capture > .15:
+            elif not camera_failed and now-last_capture > .15:
                 camera_status = 'Waiting for camera frames'
                 observation = MISSING
                 session.camera_missing(now)
-            if now-last_capture > (10 if frame is None else 2):
-                raise RuntimeError('Camera stopped delivering frames. Check camera permissions or close other camera apps.')
-            if not args.headless and frame is not None:
-                cv2.imshow(WINDOW, _display(frame, pose, hands, matches, observation, session, inference_ms,
+            if not args.headless:
+                cv2.imshow(WINDOW, _display(placeholder if frame is None else frame,
+                                           pose, hands, matches, observation, session, inference_ms,
                                            now-last_capture, camera_status))
             key = -1 if args.headless else cv2.waitKey(1) & 0xFF
             if not args.headless and cv2.getWindowProperty(WINDOW, cv2.WND_PROP_VISIBLE) < 1:
                 break
             if key in (27, ord('q'), ord('Q')):
                 break
-            if key in (ord('c'), ord('C')):
+            if key in (ord('v'),ord('V')) and not selector.switching:
+                session.prepare_camera_switch()
+                selector.request_next()
+                frame = pose = hands = None
+                matches = {}
+                observation = MISSING
+                inference_ms = 0
+            elif key in (ord('c'), ord('C')) and not selector.switching and not camera_failed:
                 session.calibrate(time.monotonic())
-            elif key == 32:
+            elif key == 32 and not selector.switching and not camera_failed:
                 if session.controller.active:
                     session.pause()
                 else:
@@ -163,7 +195,9 @@ def run(config, args):
         try:
             session.close()
         finally:
-            if camera:
+            if selector:
+                selector.close()
+            elif camera:
                 camera.close()
             if tracker:
                 tracker.close()

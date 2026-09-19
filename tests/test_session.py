@@ -117,6 +117,18 @@ class SessionTests(unittest.TestCase):
         self.assertFalse(session.controller.active)
         self.assertEqual(session.controller.angles,(90,)*4)
 
+    def test_camera_switch_holds_actual_angles_and_requires_new_calibration(self):
+        device = Device()
+        session = self.prepare(device)
+        session.resume(1.11)
+        session.prepare_camera_switch()
+        self.assertEqual(device.commands[-1], 'hold')
+        self.assertEqual(session.controller.angles, (91,92,93,94))
+        self.assertFalse(session.controller.active)
+        self.assertFalse(session.controller.calibrated)
+        session.frame(NEUTRAL, captured_at=1.2, now=1.2)
+        self.assertFalse(session.resume(1.21))
+
 
 if __name__ == '__main__':
     unittest.main()
