@@ -190,3 +190,9 @@ Set GPIO9 gain from 10 to 100 and GPIO6 left-hand rotation gain from 1 to 4. Rem
 All 196 Python tests pass. The project-config tests verify that pinch ratio 1.0 to 0.996 now requests a -45-degree nominal change, that returning to the calibrated pinch restores zero, and that positive/negative five-degree left-hand rotations independently request +/-20 degrees on IO6. Tests also cover accepting gain 100 and rejecting invalid gain values. Firmware is unchanged.
 
 Restarted on COM70/camera 1 and verified responsive live Camo video and connected status. Physical response under the new gains remains for operator assessment.
+
+## Follow-up: reduce oversensitive pinch twentyfold
+
+Reduced supplied GPIO9 pinch gain from 100 to 5. GPIO6/7/8 stay at gain 4, and keyboard steps remain 7 degrees. Updated the existing project-config regression to verify the reduced proportional response and return to calibrated zero. All 196 Python tests pass. No firmware change or automatic recentering is included.
+
+On restart the live UI revealed a stale GPIO9 command of -8467 relative to boot centre (raw -8377). The firmware pulse mapping saturates this at zero duty, explaining why gain adjustment alone would not recover claw motion. Performed a one-time recovery over COM70: read raw targets (167,95,106,-8377), sent (167,95,106,90), and confirmed that exact tuple via hold. Only GPIO9's target changed, returning it to its normal open command. This recovery is not new automatic centering behavior. Restarted the app afterward with gain 5.

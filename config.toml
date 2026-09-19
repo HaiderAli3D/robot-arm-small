@@ -34,5 +34,5 @@ gain = 4
 
 [joints.gpio9]
 direction = 1
-# Ten times the previous claw response, relative to the calibrated pinch.
-gain = 100
+# Reduced twentyfold from gain 100, relative to the calibrated pinch.
+gain = 5
