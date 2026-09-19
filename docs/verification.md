@@ -148,3 +148,11 @@ Changed servo key increments from 15 to 7 degrees. A Windows hook scoped to the 
 All 180 Python tests pass, covering tap preservation, doubled repeat cadence, OS repeat deduplication, release, focus, mode/pause retention, stalled-frame backlog, multi-key coalescing, and helper cleanup. A separate native OpenCV window, disconnected from serial, exercised the actual Windows hook with a 0.9-second numpad hold: it recorded one initial increment plus 24 repeats after the 0.5-second delay, with no increments after release. No synthetic servo movements were sent to the board.
 
 Restarted the full app on COM70/camera 1 and verified live Camo video, connected status, and the 7-degree numpad legend. It opened paused, retaining the board's commanded positions. Runtime logs and the own-window screenshot are in ignored artifacts/.
+
+## Follow-up: 1.5x repeat with immediate hold response
+
+Reduced Windows keyboard repeat from 2x to 1.5x the configured rate, retaining 7-degree increments. Removed the separate initial hold delay: the first repeat is due one regular interval after the initial press. At this laptop's setting, that is 45 increments/second and about 22 ms; actual command updates follow GUI frame timing. The app no longer reads Windows' initial repeat-delay setting.
+
+All 180 Python tests pass, including the revised immediate-start cadence, native repeat deduplication, release handling, pause/mode changes, and dropped stale backlog. An isolated native OpenCV input test with no serial connection observed 40 increments during a 0.9-second hold, with its first repeat 31 ms after the initial step and no repeats after release. The initial smoke attempt received no input because its test window lacked focus; the focused rerun passed.
+
+Restarted on COM70/camera 1 and verified live Camo video, connected status, and the retained 7-degree legend. Firmware is unchanged.

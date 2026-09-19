@@ -9,8 +9,7 @@ VIRTUAL_DIGITS = {vk: ord(str(digit)) for digit in range(1, 9)
 
 
 class KeyRepeater:
-    def __init__(self, delay, repeat_hz):
-        self.delay = delay
+    def __init__(self, repeat_hz):
         self.interval = 1 / repeat_hz
         self.pending = Counter()
         self.due = {}
@@ -25,7 +24,7 @@ class KeyRepeater:
             # Only a new physical press counts. Native typematic events are
             # ignored; even a tap wholly between video frames is retained.
             self.pending[VIRTUAL_DIGITS[vk]] += 1
-            self.due[vk] = now + self.delay
+            self.due[vk] = now + self.interval
 
     def cancel(self):
         self.pending.clear()
@@ -94,14 +93,13 @@ class WindowsServoKeys:
                 raise RuntimeError('Cannot find the servo control window on this thread')
             if u.GetWindowThreadProcessId(self.window, None) == thread_id:
                 break
-        speed, delay = w.UINT(), w.UINT()
+        speed = w.UINT()
         if not u.SystemParametersInfoW(0x000A, 0, c.byref(speed), 0):
             raise c.WinError(c.get_last_error())
-        if not u.SystemParametersInfoW(0x0016, 0, c.byref(delay), 0):
-            raise c.WinError(c.get_last_error())
         # Windows exposes 0..31 (approximately 2.5..30 repeats/second).
-        self.repeat_hz = 2 * (2.5 + 27.5 * speed.value / 31)
-        self.repeater = KeyRepeater((delay.value + 1) * .25, self.repeat_hz)
+        self.repeat_hz = 1.5 * (2.5 + 27.5 * speed.value / 31)
+        # Start repeating after one interval, without Windows' hold delay.
+        self.repeater = KeyRepeater(self.repeat_hz)
 
         def capture(code, vk, flags):
             if code == 0 and self.focused():

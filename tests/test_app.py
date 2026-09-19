@@ -217,7 +217,7 @@ class AppCameraTests(unittest.TestCase):
     def test_held_key_cannot_undo_pause_or_tracking_selection(self):
         class HeldKey:
             def __init__(self):
-                self.repeater = KeyRepeater(.5, 60)
+                self.repeater = KeyRepeater(45)
                 self.repeater.event(0x62, 1, 0)
                 self.closed = False
 

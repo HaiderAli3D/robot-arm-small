@@ -37,7 +37,7 @@ The large status banner shows your chosen mode: green **RUNNING** or amber **PAU
 
 ### Keyboard control
 
-Focus the preview window and use the number pad with **Num Lock on**. Each press changes the selected servo by **7 degrees**. On Windows, holding a key repeats at **twice the configured keyboard repeat rate**, after the usual initial repeat delay. The app reads Windows' setting without changing it (currently 30 repeats/second on this laptop, giving 60 servo increments/second). Increments due between video frames are combined into one target update per channel. The motor's physical maximum speed is unchanged.
+Focus the preview window and use the number pad with **Num Lock on**. Each press changes the selected servo by **7 degrees**. On Windows, holding a key repeats at **1.5 times the configured keyboard repeat rate**, starting one repeat interval after the initial step with no extra hold delay. The app reads Windows' speed setting without changing it (currently 30 repeats/second on this laptop, giving 45 servo increments/second and a first repeat due after about 22 ms). Increments due between video frames are combined into one target update per channel. Actual updates follow the app's frame timing. The motor's physical maximum speed is unchanged.
 
 | Servo | Decrease | Increase |
 |---|---|---|
