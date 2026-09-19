@@ -29,6 +29,12 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.joints[0], JointConfig(direction=-1,gain=0.5))
         self.assertEqual(config.joints[1], JointConfig())
 
+    def test_large_gain_is_accepted_but_nonfinite_and_nonpositive_are_rejected(self):
+        self.assertEqual(self.load('[joints.gpio9]\ngain=100\n').joints[3].gain, 100)
+        for gain in (0, -1, float('nan'), float('inf'), True):
+            with self.subTest(gain=gain), self.assertRaises(ValueError):
+                JointConfig(gain=gain)
+
     def test_rejects_invalid_or_misspelled_configuration(self):
         for text in ('max_speed=100', 'send_hz=100', 'camera=true', 'smoothing_tau=nan',
                      'deadband=-1', 'loss_timeout=1', 'unknown=3', 'claw_open=0',

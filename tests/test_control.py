@@ -56,14 +56,21 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(c.update(Observation(0,60,10,1),1.2),(90,120,90,90))
         self.assertEqual(c.update(Observation(0,30,-20,1),1.3),(90,90,60,90))
 
-    def test_project_claw_gain_is_five_times_previous_response_and_returns_to_zero(self):
+    def test_project_claw_gain_is_ten_times_previous_response_and_returns_to_zero(self):
         config = load_config(Path(__file__).resolve().parents[1] / 'config.toml')
         c = calibrated(replace(config,smoothing_tau=0,deadband=0))
-        self.assertAlmostEqual(c.update(Observation(0,0,0,.96),1.15)[3],45)
-        self.assertAlmostEqual(c.update(Observation(0,0,0,.8),1.2)[3],-135)
-        self.assertAlmostEqual(c.update(Observation(0,0,0,.6),1.3)[3],-360)
-        self.assertEqual(c.update(Observation(0,0,0,.2),1.4)[3],-810)
+        self.assertAlmostEqual(c.update(Observation(0,0,0,.996),1.15)[3],45)
+        self.assertAlmostEqual(c.update(Observation(0,0,0,.96),1.2)[3],-360)
+        self.assertAlmostEqual(c.update(Observation(0,0,0,.6),1.3)[3],-4410)
+        self.assertEqual(c.update(Observation(0,0,0,.2),1.4)[3],-8910)
         self.assertEqual(c.update(Observation(0,0,0,1),1.5)[3],90)
+
+    def test_project_left_rotation_moves_four_degrees_per_input_degree(self):
+        config = load_config(Path(__file__).resolve().parents[1] / 'config.toml')
+        c = calibrated(replace(config,smoothing_tau=0,deadband=0))
+        self.assertEqual(c.update(Observation(5,0,0,1),1.2), (110,90,90,90))
+        self.assertEqual(c.update(Observation(-5,0,0,1),1.3), (70,90,90,90))
+        self.assertEqual(c.update(NEUTRAL,1.4), (90,)*4)
 
     def test_rotation_wrap_and_repeated_pose_does_not_accumulate(self):
         c = calibrated(observation=Observation(179, 0, 0, 1))

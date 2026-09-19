@@ -182,3 +182,11 @@ Restarted the app on COM70/camera 1 with both changes. Verified live video and c
 Increased supplied GPIO9 gain from 2 to 10, multiplying pinch response by five. Calibration-relative behavior, seven-degree keyboard steps, and the other three joint gains are unchanged. The existing project-config regression now verifies that a pinch ratio change from 1.0 to 0.96 requests a -45-degree nominal change, previously requiring a change to 0.8. It also verifies stronger proportional response and return to the captured zero. All 194 Python tests pass. Firmware is unchanged.
 
 Restarted on COM70/camera 1 and verified live Camo video and connected status. Physical pinch response remains for operator assessment.
+
+## Follow-up: another tenfold pinch increase and fourfold left rotation
+
+Set GPIO9 gain from 10 to 100 and GPIO6 left-hand rotation gain from 1 to 4. Removed the configuration's former gain ceiling of 10 so the requested finite gain is accepted; numeric validation and protocol encoding checks remain. Calibration, GPIO7/8 gains, and keyboard steps are unchanged.
+
+All 196 Python tests pass. The project-config tests verify that pinch ratio 1.0 to 0.996 now requests a -45-degree nominal change, that returning to the calibrated pinch restores zero, and that positive/negative five-degree left-hand rotations independently request +/-20 degrees on IO6. Tests also cover accepting gain 100 and rejecting invalid gain values. Firmware is unchanged.
+
+Restarted on COM70/camera 1 and verified responsive live Camo video and connected status. Physical response under the new gains remains for operator assessment.

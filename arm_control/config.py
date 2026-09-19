@@ -21,7 +21,7 @@ class JointConfig:
     def __post_init__(self):
         if isinstance(self.direction, bool) or self.direction not in (-1, 1):
             raise ValueError('direction must be -1 or 1')
-        _number('gain', self.gain, 0.001, 10)
+        _number('gain', self.gain, 0.001, math.inf)
 
 
 @dataclass(frozen=True)

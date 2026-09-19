@@ -18,8 +18,9 @@ deadband = 1.0
 # No joint travel clipping. Values are nominal pulse coordinates.
 # direction = -1 reverses a control; gain scales its movement.
 [joints.gpio6]
+# Left-hand rotation: four servo degrees per degree of hand movement.
 direction = 1
-gain = 1
+gain = 4
 
 [joints.gpio7]
 # Right elbow bend: four servo degrees per degree of arm movement.
@@ -33,5 +34,5 @@ gain = 4
 
 [joints.gpio9]
 direction = 1
-# Five times the previous claw response, relative to the calibrated pinch.
-gain = 10
+# Ten times the previous claw response, relative to the calibrated pinch.
+gain = 100
