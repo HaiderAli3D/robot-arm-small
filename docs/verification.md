@@ -176,3 +176,9 @@ The final combined changes pass all 194 Python tests, including independent cont
 The existing PWM-only interface reports commanded positions, not shaft-angle feedback. After clarification, the user chose to keep servos powered, position them with keys, and save those positions as zero with C. Removed the countdown's off/restore sequence. Servos now retain their targets throughout the countdown and reference capture, with no automatic return from a released state. Calibration still takes four seconds, preserves run/pause selection, and captures each current commanded angle as zero. A dedicated regression exercises running and paused cases, non-centred keyboard positions, unchanged targets before/after capture, and a subsequent 7-degree nudge relative to the new zero. The transport off API remains available but calibration no longer calls it.
 
 Restarted the app on COM70/camera 1 with both changes. Verified live video and connected status. Exercised C while paused: the countdown showed `CALIBRATING - arm held` with unchanged commanded positions, instead of releasing the servos. Actual reference capture from a complete human pose remains for operator use; the zeroing behavior is covered by the session tests.
+
+## Follow-up: fivefold pinch sensitivity
+
+Increased supplied GPIO9 gain from 2 to 10, multiplying pinch response by five. Calibration-relative behavior, seven-degree keyboard steps, and the other three joint gains are unchanged. The existing project-config regression now verifies that a pinch ratio change from 1.0 to 0.96 requests a -45-degree nominal change, previously requiring a change to 0.8. It also verifies stronger proportional response and return to the captured zero. All 194 Python tests pass. Firmware is unchanged.
+
+Restarted on COM70/camera 1 and verified live Camo video and connected status. Physical pinch response remains for operator assessment.
