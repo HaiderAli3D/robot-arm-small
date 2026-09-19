@@ -11,11 +11,12 @@ from .session import Session
 
 WINDOW = 'Robot arm - MediaPipe'
 MISSING = Observation(None, None, None, None)
+KEYBOARD_STEP = 15
 SERVO_KEYS = {
-    ord('1'): (6,-5), ord('2'): (6,5),
-    ord('4'): (7,-5), ord('5'): (7,5),
-    ord('7'): (8,-5), ord('8'): (8,5),
-    ord('3'): (9,-5), ord('6'): (9,5),
+    ord('1'): (6,-KEYBOARD_STEP), ord('2'): (6,KEYBOARD_STEP),
+    ord('4'): (7,-KEYBOARD_STEP), ord('5'): (7,KEYBOARD_STEP),
+    ord('7'): (8,-KEYBOARD_STEP), ord('8'): (8,KEYBOARD_STEP),
+    ord('3'): (9,-KEYBOARD_STEP), ord('6'): (9,KEYBOARD_STEP),
 }
 HAND_EDGES = ((0,1),(1,2),(2,3),(3,4),(0,5),(5,6),(6,7),(7,8),
               (5,9),(9,10),(10,11),(11,12),(9,13),(13,14),(14,15),(15,16),
@@ -102,7 +103,7 @@ def _display(frame, pose, hands, matches, observation, session, inference_ms, fr
              inputs,
              f'{camera_status} | inference {inference_ms:.0f} ms | frame age {frame_age*1000:.0f} ms',
              'C calibrate   SPACE start/pause   V switch camera   R reconnect   Q / ESC quit',
-             'Numpad -/+ 5deg: 1/2 IO6   4/5 IO7   7/8 IO8   3/6 IO9   Num Lock ON',
+             f'Numpad -/+ {KEYBOARD_STEP}deg: 1/2 IO6   4/5 IO7   7/8 IO8   3/6 IO9   Num Lock ON',
              f'Control: {session.control_mode}. Servo keys move immediately. M returns to tracking.']
     for line in lines:
         for part in textwrap.wrap(line, max(70, int(width/8.2))):

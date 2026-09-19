@@ -37,7 +37,7 @@ The large status banner shows your chosen mode: green **RUNNING** or amber **PAU
 
 ### Keyboard control
 
-Focus the preview window and use the number pad with **Num Lock on**. Each press changes the selected servo by **5 degrees**; holding a key uses your keyboard's normal repeat rate.
+Focus the preview window and use the number pad with **Num Lock on**. Each press changes the selected servo by **15 degrees**; holding a key uses your keyboard's normal repeat rate. This advances the target three times as far per repeat as the previous 5-degree step; the motor's physical maximum speed is unchanged.
 
 | Servo | Decrease | Increase |
 |---|---|---|
@@ -50,7 +50,7 @@ Pressing a servo key selects **keyboard control**, starts movement, and sends th
 
 Calibration records the current servo commands and your left-hand rotation, right-elbow bend, right-wrist bend, and pinch as paired zero points. Any detected pose is accepted. Keeping the captured pose keeps all four servos at their current positions, including the claw. Later gesture changes move relative to those positions. Calibrating again replaces all four zeros with the latest positions; it does not send the arm back to centre. Keyboard steps and `Session.set_position` use the same saved zeros. Run/pause selection is preserved.
 
-GPIO7 elbow and GPIO8 wrist sensitivity are **4x**: a 5-degree change from your reference requests a 20-degree servo change before optional smoothing. GPIO6 retains 1x gain and the claw retains 2x. Keyboard steps remain 5 servo degrees. Rotating the whole right forearm without bending the wrist does not change the wrist's relative angle.
+GPIO7 elbow and GPIO8 wrist sensitivity are **4x**: a 5-degree change from your reference requests a 20-degree servo change before optional smoothing. GPIO6 retains 1x gain and the claw retains 2x. Keyboard steps are 15 servo degrees. Rotating the whole right forearm without bending the wrist does not change the wrist's relative angle.
 
 If calibration waits after the countdown, the instruction beneath the banner identifies a hand or joint the camera cannot currently track. Keep your right arm and both hands visible and apart. Missing or invalid tracking cannot supply a reference angle; your actual pose is never rejected for being bent or pinched.
 

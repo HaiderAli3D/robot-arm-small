@@ -196,7 +196,7 @@ class AppCameraTests(unittest.TestCase):
 
     def test_servo_keys_address_all_four_pins_without_a_camera(self):
         result = self.exercise([ord(k) for k in '1473q'],failed_first=True)
-        self.assertEqual(result.session.controller.angles,(85,85,85,85))
+        self.assertEqual(result.session.controller.angles,(75,75,75,75))
         self.assertEqual(result.session.control_mode,'keyboard')
         self.assertEqual([active for active,_ in result.states],[False,True,True,True,True])
 
@@ -207,7 +207,7 @@ class AppCameraTests(unittest.TestCase):
 
     def test_tracking_does_not_overwrite_keyboard_and_m_restores_tracking(self):
         result = self.exercise([ord('2'),-1,-1,ord('q')])
-        self.assertEqual(result.session.controller.angles,(95,90,90,90))
+        self.assertEqual(result.session.controller.angles,(105,90,90,90))
         result = self.exercise([ord('2'),ord('m'),-1,ord('q')])
         self.assertEqual(result.session.control_mode,'tracking')
         self.assertTrue(result.session.controller.calibrated)
