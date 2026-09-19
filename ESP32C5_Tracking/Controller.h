@@ -1,6 +1,7 @@
 #pragma once
 // Production parser/controller, independent of Arduino and heap allocation.
 #include <stdint.h>
+#include <inttypes.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -9,17 +10,17 @@ namespace robot_arm {
 class Controller {
  public:
   typedef void (*Reply)(void*, const char*);
-  typedef void (*Output)(void*, unsigned, float, bool);
+  typedef void (*Output)(void*, unsigned, int32_t, bool);
   Controller(Reply reply, Output output, void* context)
       : reply_(reply), output_(output), context_(context) {}
   void begin(uint32_t now) {
     resumed_ = false; length_ = 0; lineError_ = nullptr; carriageReturn_ = false;
     lastUpdate_ = now;
     for (unsigned i = 0; i < 4; ++i) {
-      current_[i] = target_[i] = 90.0f; enabled_[i] = true;
+      current_[i] = target_[i] = 90; enabled_[i] = true;
       output_(context_, i, current_[i], true);
     }
-    reportAngles("ROBOT_ARM 1");
+    reportAngles("ROBOT_ARM 2");
   }
   void tick(uint32_t now) {
     if (uint32_t(now - lastUpdate_) < 20) return;
@@ -49,7 +50,7 @@ class Controller {
   Reply reply_;
   Output output_;
   void* context_;
-  float current_[4] = {90, 90, 90, 90}, target_[4] = {90, 90, 90, 90};
+  int32_t current_[4] = {90, 90, 90, 90}, target_[4] = {90, 90, 90, 90};
   bool enabled_[4] = {true, true, true, true}, resumed_ = false;
   uint32_t lastUpdate_ = 0;
   char buffer_[96] = {};
@@ -61,21 +62,25 @@ class Controller {
     for (unsigned i = 0; i < 4; ++i) target_[i] = current_[i];
   }
   void reportAngles(const char* prefix) {
-    char response[64];
-    snprintf(response, sizeof(response), "%s %d %d %d %d", prefix,
-             int(current_[0] + 0.5f), int(current_[1] + 0.5f),
-             int(current_[2] + 0.5f), int(current_[3] + 0.5f));
+    char response[96];
+    snprintf(response, sizeof(response), "%s %" PRId32 " %" PRId32 " %" PRId32 " %" PRId32,
+             prefix, current_[0], current_[1], current_[2], current_[3]);
     reply_(context_, response);
   }
-  static bool angle(const char* token, int& value) {
+  static bool angle(const char* token, int32_t& value) {
+    bool negative = false;
+    if (*token == '-' || *token == '+') { negative = *token == '-'; ++token; }
     if (!*token) return false;
-    value = 0;
+    uint32_t magnitude = 0;
+    const uint32_t limit = negative ? UINT32_C(2147483648) : UINT32_C(2147483647);
     for (; *token; ++token) {
       if (*token < '0' || *token > '9') return false;
-      // Value was <=180 before multiplication: cannot overflow.
-      value = value * 10 + (*token - '0');
-      if (value > 180) return false;
+      const uint32_t digit = uint32_t(*token - '0');
+      if (magnitude > (limit - digit) / 10) return false;
+      magnitude = magnitude * 10 + digit;
     }
+    // Widen before negation so INT32_MIN never requires signed overflow.
+    value = negative ? int32_t(-int64_t(magnitude)) : int32_t(magnitude);
     return true;
   }
   void command(uint32_t now) {
@@ -91,16 +96,16 @@ class Controller {
     if (count == 0) return;
     const char* name = fields[0];
     if (strcmp(name, "pose") == 0) {
-      int values[4];
+      int32_t values[4];
       if (count != 5) { reply_(context_, "ERR fields"); return; }
       for (unsigned i = 0; i < 4; ++i) {
         if (!angle(fields[i+1], values[i])) { reply_(context_, "ERR angle"); return; }
       }
       if (!resumed_) { reply_(context_, "ERR paused"); return; }
-      for (unsigned i = 0; i < 4; ++i) { target_[i] = float(values[i]); enabled_[i] = true; }
+      for (unsigned i = 0; i < 4; ++i) { target_[i] = values[i]; enabled_[i] = true; }
       reply_(context_, "OK pose"); return;
     }
-    if (count == 1 && strcmp(name, "hello") == 0) { freeze(); reportAngles("ROBOT_ARM 1"); return; }
+    if (count == 1 && strcmp(name, "hello") == 0) { freeze(); reportAngles("ROBOT_ARM 2"); return; }
     if (count == 1 && strcmp(name, "hold") == 0) { freeze(); reportAngles("OK hold"); return; }
     if (count == 1 && strcmp(name, "resume") == 0) {
       freeze(); resumed_ = true; lastUpdate_ = now;
@@ -122,11 +127,11 @@ class Controller {
       }
       reply_(context_, "OK off"); return;
     }
-    int value;
+    int32_t value;
     if (count == 2 && (single || all) && angle(fields[1], value)) {
       freeze();
       for (unsigned i = 0; i < 4; ++i) {
-        if (all || i == unsigned(name[0] - '1')) { target_[i] = float(value); enabled_[i] = true; }
+        if (all || i == unsigned(name[0] - '1')) { target_[i] = value; enabled_[i] = true; }
       }
       reply_(context_, "OK manual"); return;
     }

@@ -1,4 +1,4 @@
-"""Bounded synchronous USB serial transport for robot-arm protocol version 1.
+"""Bounded synchronous USB serial transport for robot-arm protocol version 2.
 
 Opening a UART may reset an ESP32 through its adapter's DTR/RTS wiring. Wait
 two seconds for that boot to settle, resynchronize any unfinished device input
@@ -15,6 +15,10 @@ import threading
 import time
 from collections.abc import Callable, Iterable
 from numbers import Real
+
+
+_MIN_WIRE_INT = -2147483648
+_MAX_WIRE_INT = 2147483647
 
 
 class LinkError(RuntimeError):
@@ -76,7 +80,11 @@ class SerialLink:
             self._sleep(2.0)
             self._serial.reset_input_buffer()
             self._resynchronize()
-            return self._angles_reply(self._exchange("hello"), "ROBOT_ARM 1")
+            reply = self._exchange("hello")
+            version = re.match(r"ROBOT_ARM ([0-9]+)(?: |$)", reply)
+            if version is not None and version.group(1) != "2":
+                raise LinkError(f"Incompatible firmware: host requires protocol 2; device reported {version.group(1)}")
+            return self._angles_reply(reply, "ROBOT_ARM 2")
         except Exception as exc:
             self._disconnect()
             if isinstance(exc, LinkError):
@@ -103,13 +111,13 @@ class SerialLink:
 
     @staticmethod
     def _angles_reply(reply: str, prefix: str) -> tuple[float, ...]:
-        match = re.fullmatch(re.escape(prefix) + r" ([0-9]+) ([0-9]+) ([0-9]+) ([0-9]+)", reply)
+        match = re.fullmatch(re.escape(prefix) + r" (-?[0-9]+) (-?[0-9]+) (-?[0-9]+) (-?[0-9]+)", reply)
         if match is None:
             raise LinkError(f"Malformed firmware response: {reply!r}")
-        angles = tuple(float(value) for value in match.groups())
-        if any(value > 180 for value in angles):
-            raise LinkError("Firmware returned out-of-range angles")
-        return angles
+        angles = tuple(int(value) for value in match.groups())
+        if any(not _MIN_WIRE_INT <= value <= _MAX_WIRE_INT for value in angles):
+            raise LinkError("Firmware angle exceeds signed 32-bit protocol encoding")
+        return tuple(float(value) for value in angles)
 
     def _exchange(self, command: str) -> str:
         serial = self._serial
@@ -182,12 +190,16 @@ class SerialLink:
         try:
             values = tuple(angles)
             if len(values) != 4 or any(isinstance(value, bool) or not isinstance(value, Real)
-                                      or not 0 <= value <= 180 or not math.isfinite(value)
                                       for value in values):
-                raise ValueError("expected four finite angles in 0..180")
-        except (TypeError, ValueError) as exc:
-            raise LinkError("Pose requires four finite numeric angles in 0..180") from exc
-        self._command("pose " + " ".join(str(round(value)) for value in values))
+                raise ValueError("expected four numeric angles")
+            # Rounding rejects NaN/infinity; check the encoded integers rather
+            # than imposing a physical motor-travel limit on the requested pose.
+            encoded = tuple(round(value) for value in values)
+            if any(not _MIN_WIRE_INT <= value <= _MAX_WIRE_INT for value in encoded):
+                raise ValueError("angle exceeds signed 32-bit protocol encoding")
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise LinkError("Pose requires four finite numeric angles encodable as signed 32-bit integers") from exc
+        self._command("pose " + " ".join(str(value) for value in encoded))
 
     def close(self) -> None:
         """Best-effort hold with the normal timeout, followed by port release."""

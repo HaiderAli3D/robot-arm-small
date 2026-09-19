@@ -2,7 +2,9 @@
   Waveshare ESP32-C5-WIFI6-KIT-N16R4; USB-C UART, 115200 baud.
   ESP32C5 Dev Module, Espressif core 3.3.10, USB CDC On Boot Disabled.
   GPIO6/7/8/9 are servo 1/2/3/4. All boot at nominal 90 degrees.
-  Positional MG90S: 1000..2000us at 50Hz, not calibrated physical degrees.
+  Protocol v2 accepts signed int32 raw angles: 90=center. Pulse mapping is
+  1000 + angle*1000/180 microseconds at 50Hz, not calibrated physical degrees.
+  There is no servo travel clamp; only representable electrical PWM is bounded.
   Boot can move the mechanism because its actual position is unknown.
 
   Supply servos directly from an appropriately sized regulated 5V supply;
@@ -17,10 +19,9 @@
 */
 #include <Arduino.h>
 #include "Controller.h"
+#include "Pulse.h"
 
 constexpr uint8_t SERVO_PINS[4] = {6, 7, 8, 9};
-constexpr uint32_t PWM_HZ = 50;
-constexpr uint8_t PWM_BITS = 14;
 bool attached[4] = {false, false, false, false};
 bool hardwareFault = false;
 
@@ -34,12 +35,9 @@ void reply(void*, const char* response) {
   if (!hardwareFault) Serial.println(response);
 }
 
-void output(void*, unsigned index, float angle, bool enabled) {
+void output(void*, unsigned index, int32_t angle, bool enabled) {
   if (hardwareFault) return;
-  const uint32_t pulseUs = uint32_t(1000.0f + angle * (1000.0f / 180.0f) + 0.5f);
-  const uint32_t duty = enabled
-      ? uint32_t((uint64_t(pulseUs) * (1UL << PWM_BITS) * PWM_HZ + 500000) / 1000000)
-      : 0;
+  const uint32_t duty = enabled ? robot_arm::pulseDuty(angle) : 0;
   if (!attached[index] || !ledcWrite(SERVO_PINS[index], duty)) {
     hardwareFault = true;
     stopPulses();
@@ -54,7 +52,7 @@ void setup() {
   for (unsigned i = 0; i < 4; ++i) {
     pinMode(SERVO_PINS[i], OUTPUT);
     digitalWrite(SERVO_PINS[i], LOW);
-    attached[i] = ledcAttach(SERVO_PINS[i], PWM_HZ, PWM_BITS);
+    attached[i] = ledcAttach(SERVO_PINS[i], robot_arm::PWM_HZ, robot_arm::PWM_BITS);
     if (!attached[i]) hardwareFault = true;
   }
   if (hardwareFault) { stopPulses(); Serial.println("ERR hardware"); }

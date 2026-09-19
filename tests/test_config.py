@@ -19,8 +19,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.hand_confidence, .35)
 
     def test_user_joint_override_preserves_other_defaults(self):
-        config = self.load('[joints.gpio6]\ndirection=-1\ngain=0.5\nminimum=40\nmaximum=140\n')
-        self.assertEqual(config.joints[0], JointConfig(40, 140, -1, 0.5))
+        config = self.load('[joints.gpio6]\ndirection=-1\ngain=0.5\n')
+        self.assertEqual(config.joints[0], JointConfig(direction=-1,gain=0.5))
         self.assertEqual(config.joints[1], JointConfig())
 
     def test_rejects_invalid_or_misspelled_configuration(self):
@@ -36,11 +36,23 @@ class ConfigTests(unittest.TestCase):
                 self.load(text)
 
     def test_claw_endpoint_can_be_reversed(self):
-        self.assertEqual(self.load('claw_closed=180').claw_closed, 180)
+        self.assertEqual(self.load('claw_closed=270').claw_closed, 270)
 
     def test_nonfinite_direct_config_is_rejected(self):
         with self.assertRaises(ValueError):
             Config(smoothing_tau=float('nan'))
+
+    def test_combined_claw_endpoint_must_fit_integer_encoding(self):
+        for endpoint,direction,gain in ((-(2**31),1,2), (-(2**31),-1,1),
+                                       (2**31-1,1,2)):
+            with self.subTest(endpoint=endpoint,direction=direction,gain=gain):
+                with self.assertRaisesRegex(ValueError,'claw target'):
+                    Config(claw_closed=endpoint,
+                           joints=(JointConfig(),)*3+(JointConfig(direction=direction,gain=gain),))
+        for target in (-(2**31),2**31-1):
+            config = Config(claw_closed=(target+90)/2,
+                            joints=(JointConfig(),)*3+(JointConfig(gain=2),))
+            self.assertEqual(90+2*(config.claw_closed-90),target)
 
 
 if __name__ == '__main__':

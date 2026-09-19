@@ -45,11 +45,11 @@ class ControllerTests(unittest.TestCase):
             self.assertAlmostEqual(got, expected)
         self.assertEqual(advance(c, Observation(30, 5, -5, 1), start=3.1), (90, 90, 90, 90))
 
-    def test_joint_reversal_gain_and_bounds_include_claw(self):
-        joints = (JointConfig(70, 110, -1, 2), JointConfig(0, 110, 1, 2),
-                  JointConfig(60, 130, -1, 1), JointConfig(0, 120, -1, 0.5))
+    def test_joint_reversal_and_gain_without_output_clipping(self):
+        joints = (JointConfig(direction=-1, gain=2), JointConfig(gain=2),
+                  JointConfig(direction=-1), JointConfig(direction=-1, gain=0.5))
         c = calibrated(Config(joints=joints, smoothing_tau=0, deadband=0))
-        self.assertEqual(advance(c, Observation(30, 30, -50, 0.2)), (70, 110, 130, 120))
+        self.assertEqual(advance(c, Observation(30, 30, -50, 0.2)), (30, 150, 140, 135))
 
     def test_elbow_only_drives_gpio7_and_wrist_only_drives_gpio8(self):
         c = calibrated(observation=Observation(0,30,10,1))
@@ -61,7 +61,7 @@ class ControllerTests(unittest.TestCase):
         c = calibrated(replace(config,smoothing_tau=0,deadband=0))
         self.assertAlmostEqual(c.update(Observation(0,0,0,.8),1.2)[3],45)
         self.assertAlmostEqual(c.update(Observation(0,0,0,.6),1.3)[3],0)
-        self.assertEqual(c.update(Observation(0,0,0,.2),1.4)[3],0)
+        self.assertEqual(c.update(Observation(0,0,0,.2),1.4)[3],-90)
         self.assertEqual(c.update(Observation(0,0,0,1),1.5)[3],90)
 
     def test_rotation_wrap_and_repeated_pose_does_not_accumulate(self):
@@ -212,7 +212,7 @@ class ControllerTests(unittest.TestCase):
         c = calibrated()
         c.sync_angles((90,90,90,90))
         self.assertTrue(c.active)
-        for angles in ((90, 90), (90, 90, 90, math.nan), (90, 90, 90, 181)):
+        for angles in ((90, 90), (90, 90, 90, math.nan), (90, 90, 90, 2**31)):
             with self.assertRaises(ValueError):
                 c.sync_angles(angles)
         self.assertEqual(c.angles, (90, 90, 90, 90))
@@ -239,6 +239,31 @@ class ControllerTests(unittest.TestCase):
         c.update(Observation(90,90,90,.1),7)
         self.assertFalse(c.active)
         self.assertEqual(c.angles,(90,)*4)
+
+    def test_tracking_crosses_old_limits_on_every_channel(self):
+        c = calibrated(Config(smoothing_tau=0, deadband=0,
+                              joints=(JointConfig(gain=2),) * 4))
+        self.assertEqual(c.update(Observation(100,100,-100,.2),1.2),
+                         (290,290,-110,-90))
+        self.assertEqual(c.positions,(200,200,-200,-180))
+        self.assertTrue(c.active)
+
+    def test_keyboard_can_cross_both_old_endpoints_and_reverse_immediately(self):
+        for index in range(4):
+            c = Controller(Config())
+            c.nudge(index,180)
+            self.assertEqual(c.positions[index],180)
+            c.nudge(index,-5)
+            self.assertEqual(c.positions[index],175)
+            c.nudge(index,-355)
+            self.assertEqual(c.positions[index],-180)
+            c.nudge(index,5)
+            self.assertEqual(c.positions[index],-175)
+
+    def test_sync_accepts_extended_device_positions(self):
+        c = Controller(Config())
+        c.sync_angles((-270,-90,270,450))
+        self.assertEqual(c.positions,(-360,-180,180,360))
 
 
 if __name__ == "__main__":

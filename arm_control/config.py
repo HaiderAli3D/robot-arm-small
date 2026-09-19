@@ -15,14 +15,10 @@ def _number(name, value, minimum, maximum):
 
 @dataclass(frozen=True)
 class JointConfig:
-    minimum: float = 0
-    maximum: float = 180
     direction: int = 1
     gain: float = 1
 
     def __post_init__(self):
-        _number('minimum', self.minimum, 0, 90)
-        _number('maximum', self.maximum, 90, 180)
         if isinstance(self.direction, bool) or self.direction not in (-1, 1):
             raise ValueError('direction must be -1 or 1')
         _number('gain', self.gain, 0.001, 10)
@@ -50,7 +46,10 @@ class Config:
         ):
             raise ValueError('joints must contain four JointConfig values in GPIO order')
         _number('claw_open', self.claw_open, 90, 90)
-        _number('claw_closed', self.claw_closed, self.joints[3].minimum, self.joints[3].maximum)
+        _number('claw_closed', self.claw_closed, -(2**31), 2**31 - 1)
+        claw = self.joints[3]
+        target = self.claw_open + claw.direction * claw.gain * (self.claw_closed - self.claw_open)
+        _number('claw target after gain/direction', target, -(2**31), 2**31 - 1)
         for name, low, high in (
             ('pinch_closed_ratio', 0, 0.39), ('smoothing_tau', 0, 2),
             ('pinch_open_ratio', 0.01, 10),

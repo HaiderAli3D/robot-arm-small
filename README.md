@@ -7,9 +7,9 @@ Track your arms and hands locally with MediaPipe, then send four servo positions
 | GPIO6 | Left hand turning like a clock hand in the camera preview | 0 degrees at captured reference |
 | GPIO7 | Right elbow bending | 0 degrees at captured reference |
 | GPIO8 | Right wrist bending relative to the forearm | 0 degrees at captured reference |
-| GPIO9 | Right thumb/index pinch | 0 degrees open, -90 degrees closed |
+| GPIO9 | Right thumb/index pinch | 0 degrees open; pinch drives negative positions |
 
-The app displays **signed positions from -90 to +90 degrees**, with 0 at servo centre. Firmware still uses its existing 0..180 commands: signed position + 90 = firmware angle. Boot centres all channels (displayed 0); the linkages are assumed aligned for a straight arm and open claw there. There are no joint-position sensors: displayed values are commands, not measured mechanical feedback. This coordinate change does not extend the servos' physical travel. The user's `RELATIVE-CW-v4` sample remains unchanged under `ESP32C5_FourServos`; the app uses the separate `ESP32C5_Tracking` sketch.
+The app displays **signed positions with 0 at servo centre**, without the old -90/+90 travel cap. Keyboard and tracking targets may exceed those values on every servo. Protocol 2 uses raw position = displayed position + 90. Boot centres all channels (displayed 0); the linkages are assumed aligned for a straight arm and open claw there. Displayed values are requested positions, not measured shaft angles. The servo's mechanical travel is unchanged. The user's `RELATIVE-CW-v4` sample remains unchanged under `ESP32C5_FourServos`; the app uses the separate `ESP32C5_Tracking` sketch.
 
 ## Quick start on this laptop
 
@@ -46,7 +46,7 @@ Focus the preview window and use these keys. Each press changes the selected ser
 | IO8 | U | I |
 | IO9 | P | [ |
 
-Pressing a servo key selects **keyboard control**, starts movement, and sends the new angle immediately. It works without hand detection or calibration. Camera gestures cannot overwrite keyboard positions. **Space** pauses/resumes; another servo key also resumes and moves. **M** selects tracking again while retaining your run/pause choice; **C** selects tracking and starts its four-second calibration countdown. Reconnecting retains keyboard mode. Keyboard steps are direct servo degrees, independent of tracking gain and direction, within the configured joint ranges. Uppercase letters work too.
+Pressing a servo key selects **keyboard control**, starts movement, and sends the new angle immediately. It works without hand detection or calibration. Camera gestures cannot overwrite keyboard positions. **Space** pauses/resumes; another servo key also resumes and moves. **M** selects tracking again while retaining your run/pause choice; **C** selects tracking and starts its four-second calibration countdown. Reconnecting retains keyboard mode. Keyboard steps are direct servo degrees, independent of tracking gain and direction, with no joint travel clipping. Uppercase letters work too.
 
 Calibration records left-hand rotation, right-elbow bend, and right-wrist bend as software zero points for GPIO6, GPIO7, and GPIO8. Any detected pose is accepted. A new reference takes effect automatically if running, or waits for Space if paused. Rotating the whole right forearm without bending the wrist does not change the wrist's relative angle. Claw control uses absolute pinch separation independently of the reference.
 
@@ -68,7 +68,7 @@ The original sketch identifies a **Waveshare ESP32-C5-WIFI6-KIT-N16R4**. Use the
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run.ps1 -Port COM9
 ```
 
-Replace `COM9` with the actual USB UART port; Bluetooth COM ports are not the robot. Opening a UART may reset the board and center the servos. The app waits for startup, performs a versioned handshake, and initially stays paused until Space. A reconnect restores the previously selected run/pause state. Upload the current tracking firmware to remove the older firmware's automatic timeout.
+Replace `COM9` with the actual USB UART port; Bluetooth COM ports are not the robot. Opening a UART may reset the board and center the servos. The app waits for startup, performs a versioned handshake, and initially stays paused until Space. A reconnect restores the previously selected run/pause state. This app requires protocol 2 firmware: upload the current tracking sketch before restarting live control. Protocol 1 firmware rejects extended positions and is incompatible with this app.
 
 To compile without uploading:
 
@@ -85,19 +85,17 @@ Use positional servos such as the existing sketch's MG90S. Continuous-rotation s
 - Keep the external servo +5V rail separate from the laptop/board USB +5V rail.
 - GPIO7 is also a reset-time JTAG strapping pin on ESP32-C5; avoid external circuitry that forces its reset level. It operates as a normal PWM output after boot.
 
-The retained 50Hz, 14-bit PWM maps nominal 0..180 degrees to 1000..2000 microseconds. **Verify mechanical endpoints and direction before loading the arm.** Begin around 90 with small manual moves, then set `minimum`, `maximum`, `direction`, and `gain` in `config.toml`. For example, limit a joint to 60..120 for initial testing. The configured interval must contain 90.
+The 50Hz, 14-bit PWM retains the linear mapping `pulse_us = 1500 + signed_position * 1000 / 180`, extending past the old 1000..2000 microsecond envelope. For example, signed -180 and +180 request 500 and 2500 microseconds. The only output saturation is the electrical duty register's representable range, 0..16383; negative pulse widths and pulses longer than a PWM period cannot be produced. Extreme requested positions may therefore share the same output. Neither requested degrees nor pulse widths establish a servo's actual mechanical travel.
 
-GPIO9 defaults to open=90, closed=0. Set `claw_closed` to the tested closed position (including 180 if that matches your linkage) and keep it inside GPIO9's limits. Pinch closure is proportional to thumb/index separation divided by palm width: `pinch_closed_ratio = 0.2` sets fully closed and `pinch_open_ratio = 1.0` sets fully open. These thresholds are independent of calibration and can be adjusted for your hand. Calibrating with pinched fingers is valid; once you press Space the claw follows your pinch. Do not reverse both the claw endpoint and its direction unless you intend that combined effect.
+`direction` reverses a tracking control and `gain` scales it. The `minimum` and `maximum` joint settings have been removed. GPIO9 defaults to raw `claw_open=90`, `claw_closed=0`; these are mapping reference points rather than enforced travel endpoints. Pinch closure is thumb/index separation divided by palm width, normalized between `pinch_open_ratio=1.0` and `pinch_closed_ratio=0.2`. Closure itself stays between 0 and 1. With GPIO9 `gain=2`, ratios 1.0, 0.8, 0.6, and 0.2 request signed positions 0, -45, -90, and -180 respectively. Calibration does not change this pinch mapping.
 
-The supplied configuration sets `[joints.gpio9] gain = 2` for twice the claw response. In signed display coordinates, a pinch ratio of 0.8 commands -45 degrees, 0.6 commands fully closed at -90, and 1.0 or higher opens to 0. GPIO7 controls elbow bend and GPIO8 controls wrist bend.
-
-The servo protocol and the `minimum`, `maximum`, `claw_open`, and `claw_closed` configuration values remain in raw 0..180 coordinates. UI positions and `Session.set_position(pin, position, now)` use signed -90..90 coordinates. There is no firmware or app speed cap; firmware applies each target on its next 50Hz output tick. Optional `smoothing_tau` and `deadband` filter tracking jitter. Narrower configured joint ranges apply to tracking and keyboard commands. The obsolete `max_speed` and `loss_timeout` settings have been removed.
+The serial protocol, `claw_open`, and `claw_closed` retain the raw coordinate offset (90 = centre); UI positions and `Session.set_position(pin, position, now)` are signed about zero. Commands use signed 32-bit integers, rounded to the nearest nominal degree. The finite-number and integer-encoding checks remain; there are no configured joint travel limits or speed caps. Firmware applies each target on its next 50Hz output tick. Optional `smoothing_tau` and `deadband` filter tracking jitter. GPIO7 controls elbow bend and GPIO8 controls wrist bend.
 
 ## Loss of tracking, pause, and reconnect
 
 A missing control keeps its last target while any visible controls continue updating. Running stays selected indefinitely, and returning tracking updates the targets immediately. Camera stalls and old frame timestamps do not pause the app. The firmware has no inactivity watchdog: it retains its last target and continues accepting poses without another resume command.
 
-On USB failure, the app retains your reference and run/pause choice. Press **R** to reconnect; if running was selected, control continues automatically. Reconnecting may reboot/recenter the board. Space explicitly pauses and holds the current output. Q/Escape and closing the window also stop the application. Basic command syntax, finite-number checks, and supported servo-angle bounds remain.
+On USB failure, the app retains your reference and run/pause choice. Press **R** to reconnect; if running was selected, control continues automatically. Reconnecting may reboot/recenter the board. Space explicitly pauses and holds the current output. Q/Escape and closing the window also stop the application. Basic command syntax, finite-number checks, and integer-encoding checks remain.
 
 Quit and pause are software holds, not electrical emergency stops. `off` stops pulses and can release holding torque while power remains connected. Disconnect servo power when necessary for mechanical work.
 
@@ -123,17 +121,17 @@ If the camera cannot open, press **V** in the window, check Windows **Privacy & 
 
 ## Serial protocol and manual controls
 
-115200 baud, ASCII newline-delimited, protocol version 1. All four pose angles are integers in **GPIO6, GPIO7, GPIO8, GPIO9** order. A whole pose is rejected if any field is invalid. Only one command is in flight at once.
+115200 baud, ASCII newline-delimited, protocol version 2. All four pose angles are integers in **GPIO6, GPIO7, GPIO8, GPIO9** order. A whole pose is rejected if any field is invalid. Only one command is in flight at once.
 
 | Command | Response / effect |
 |---|---|
-| `hello` | `ROBOT_ARM 1 a6 a7 a8 a9`; freezes and pauses |
+| `hello` | `ROBOT_ARM 2 a6 a7 a8 a9`; freezes and pauses |
 | `resume` | `OK resume`; allows tracking updates |
 | `pose 90 100 80 50` | `OK pose`; sets all four targets |
 | `hold` | `OK hold a6 a7 a8 a9`; freezes current outputs |
 | Invalid command | `ERR reason`; valid tracking remains enabled |
 
-The tracking sketch includes **absolute-angle** manual commands: `1 90`, `2 45`, `3 120`, `4 60`, `all 90`, `1 off`, `off`, and `help`. Thus `1 90` means center; it does not add 90 degrees. Your preserved `RELATIVE-CW-v4` sample instead uses signed relative increments and `center`/`status`. These are separate firmware programs. Manual moves and off commands explicitly leave tracking mode; `help` does not. Targets apply directly without repeated heartbeats. Use manual commands with the app disconnected. After `off`, `resume` alone leaves pulses disabled; an accepted pose enables the outputs again.
+The tracking sketch includes **absolute-angle** manual commands: `1 90`, `2 45`, `3 120`, `4 60`, `all 90`, `1 off`, `off`, and `help`. Thus `1 90` means center; it does not add 90 degrees. Extended examples: `1 -90` requests signed -180 and `1 270` requests signed +180. Your preserved `RELATIVE-CW-v4` sample instead uses signed relative increments and `center`/`status`. These are separate firmware programs. Manual moves and off commands explicitly leave tracking mode; `help` does not. Targets apply directly without repeated heartbeats. Use manual commands with the app disconnected. After `off`, `resume` alone leaves pulses disabled; an accepted pose enables the outputs again.
 
 See [verification notes](docs/verification.md) for actual tests and remaining hardware checks.
 

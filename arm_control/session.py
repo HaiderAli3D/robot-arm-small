@@ -76,11 +76,11 @@ class Session:
         self._next_send = now + 1 / self.config.send_hz
 
     def set_position(self, pin, position, now):
-        """Select a signed -90..90 degree position using the normal manual path."""
+        """Select a signed position about centre using the normal manual path."""
         if isinstance(pin, bool) or not isinstance(pin, int) or pin not in range(6,10):
             raise ValueError('servo pin must be GPIO6..GPIO9')
-        if isinstance(position, bool) or not isinstance(position, Real) or not -90 <= position <= 90:
-            raise ValueError('servo position must be a finite number in -90..90 degrees')
+        if isinstance(position, bool) or not isinstance(position, Real) or not -(2**31)-90 <= position <= 2**31-1-90:
+            raise ValueError('servo position must be finite and encodable as a signed 32-bit device angle')
         return self.nudge(pin, position - self.controller.positions[pin-6], now)
 
     def prepare_camera_switch(self):

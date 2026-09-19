@@ -15,31 +15,23 @@ pinch_open_ratio = 1.0
 smoothing_tau = 0.12
 deadband = 1.0
 
-# Set limits for your mechanism BEFORE live use. These are nominal pulse angles.
+# No joint travel clipping. Values are nominal pulse coordinates.
 # direction = -1 reverses a control; gain scales its movement.
 [joints.gpio6]
-minimum = 0
-maximum = 180
 direction = 1
 gain = 1
 
 [joints.gpio7]
 # Right elbow bend.
-minimum = 0
-maximum = 180
 direction = 1
 gain = 1
 
 [joints.gpio8]
 # Right wrist bend.
-minimum = 0
-maximum = 180
 direction = 1
 gain = 1
 
 [joints.gpio9]
-minimum = 0
-maximum = 180
 direction = 1
-# Double claw response: fully closed at pinch ratio 0.6 with current endpoints.
+# Double claw response: ratios 0.6 and 0.2 request signed -90 and -180.
 gain = 2

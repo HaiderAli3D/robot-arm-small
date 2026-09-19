@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 import math
+from numbers import Real
 
 from .config import Config
 
@@ -22,7 +23,7 @@ class Controller:
     """Map rotation/elbow/wrist to GPIO6/7/8 and pinch to GPIO9.
 
     Claw target is open + direction * gain * closure * (closed - open),
-    clamped to configured joint bounds. Closure is 0 at pinch_open_ratio
+    without joint travel clipping. Closure is 0 at pinch_open_ratio
     and 1 at pinch_closed_ratio; reversing direction reverses travel.
 
     Calibration snapshots any complete tracked pose after the countdown.
@@ -49,8 +50,11 @@ class Controller:
 
     @staticmethod
     def _checked_angles(angles) -> list[float]:
-        if len(angles) != 4 or not all(math.isfinite(v) and 0 <= v <= 180 for v in angles):
-            raise ValueError("requires four finite device angles in 0..180")
+        if len(angles) != 4 or not all(
+            not isinstance(v, bool) and isinstance(v, Real)
+            and -(2**31) <= v <= 2**31 - 1 and math.isfinite(v) for v in angles
+        ):
+            raise ValueError("requires four finite device angles representable as signed 32-bit values")
         return [float(v) for v in angles]
 
     def sync_angles(self, angles) -> None:
@@ -109,9 +113,8 @@ class Controller:
             raise ValueError('servo index must be 0..3')
         if not math.isfinite(delta):
             raise ValueError('servo increment must be finite')
-        joint = self.config.joints[index]
         angles = list(self.angles)
-        angles[index] = max(joint.minimum, min(joint.maximum, angles[index] + delta))
+        angles[index] += delta
         self.sync_angles(angles)
         self._calibrating = False
 
@@ -174,7 +177,6 @@ class Controller:
                 relative = (value - self._reference[source] if source == 1
                             else _relative(value, self._reference[source]))
                 target = 90.0 + joint.direction * joint.gain * relative
-            target = max(joint.minimum, min(joint.maximum, target))
             if abs(target - self._angles[i]) <= self.config.deadband:
                 self._filtered[i] = self._angles[i]
                 continue

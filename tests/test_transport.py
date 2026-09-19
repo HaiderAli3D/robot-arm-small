@@ -17,7 +17,7 @@ class Clock:
 
 
 class SerialStream:
-    def __init__(self, clock, responses=None, boot=b"ROBOT_ARM 1 90 90 90 90\n"):
+    def __init__(self, clock, responses=None, boot=b"ROBOT_ARM 2 90 90 90 90\n"):
         self.clock = clock
         self.responses = responses or {}
         self.incoming = bytearray(boot)
@@ -90,7 +90,7 @@ class PersistentDeviceStream(SerialStream):
                 reply = b"ERR invalid\n"
             elif command == b"hello":
                 self.resumed_at = None
-                reply = b"ROBOT_ARM 1 70 80 90 100\n"
+                reply = b"ROBOT_ARM 2 70 80 90 100\n"
             elif command == b"resume":
                 self.resumed_at = self.clock()
                 self.accepted_resumes.append(self.clock())
@@ -99,7 +99,7 @@ class PersistentDeviceStream(SerialStream):
                 self.applied_manual.append(command)
                 reply = b"OK\n"
             elif command == b"pose 10 20 30 40":
-                if self.resumed_at is not None and self.clock() - self.resumed_at < 0.5:
+                if self.resumed_at is not None:
                     self.applied_poses.append(command)
                     reply = b"OK pose\n"
                 else:
@@ -114,7 +114,7 @@ class TransportTests(unittest.TestCase):
     def make_link(self, responses=None, timeout=0.5):
         clock = Clock()
         serial = SerialStream(clock, responses if responses is not None else {
-            b"hello\n": b"ROBOT_ARM 1 70 80 90 100\r\n",
+            b"hello\n": b"ROBOT_ARM 2 70 80 90 100\r\n",
             b"resume\n": b"OK resume\n",
             b"hold\n": b"OK hold 71 81 91 101\n",
             b"pose 10 20 30 40\n": b"OK pose\n",
@@ -165,10 +165,11 @@ class TransportTests(unittest.TestCase):
         self.assertLessEqual(clock.now, 3.0)
 
     def test_bad_handshakes_close_the_link(self):
-        for reply in (b"ROBOT_ARM 2 90 90 90 90\n", b"ROBOT_ARM 1 90 90 90\n",
-                      b"ROBOT_ARM 1 -1 90 90 90\n", b"ROBOT_ARM 1 90 181 90 90\n",
-                      b"ROBOT_ARM 1 90.0 90 90 90\n", b"OK resume\n", b"\xff\n",
-                      b"X" * 96 + b"\n", b"ROBOT_ARM 1 90 90 90 90\nOK pose\n"):
+        for reply in (b"ROBOT_ARM 3 90 90 90 90\n", b"ROBOT_ARM 2 90 90 90\n",
+                      b"ROBOT_ARM 2 -2147483649 90 90 90\n", b"ROBOT_ARM 2 90 2147483648 90 90\n",
+                      b"ROBOT_ARM 2 90.0 90 90 90\n", b"ROBOT_ARM 2 True 90 90 90\n",
+                      b"ROBOT_ARM 2 --1 90 90 90\n", b"OK resume\n", b"\xff\n",
+                      b"X" * 96 + b"\n", b"ROBOT_ARM 2 90 90 90 90\nOK pose\n"):
             with self.subTest(reply=reply):
                 link, serial, _, _ = self.make_link({b"hello\n": reply})
                 with self.assertRaises(LinkError):
@@ -183,10 +184,10 @@ class TransportTests(unittest.TestCase):
         self.assertNotIn(b"pose 10 20 30 40\n", serial.writes)
 
     def test_invalid_angles_never_reach_wire(self):
-        for angles in ((1, 2, 3), (1, 2, 3, 4, 5), (-0.1, 2, 3, 4),
-                       (181, 2, 3, 4), (float("nan"), 2, 3, 4),
+        for angles in ((1, 2, 3), (1, 2, 3, 4, 5), (-2147483649, 2, 3, 4),
+                       (2147483648, 2, 3, 4), (float("nan"), 2, 3, 4),
                        (float("inf"), 2, 3, 4), (True, 2, 3, 4), ("90", 2, 3, 4),
-                       (10 ** 1000, 2, 3, 4)):
+                       (-float("inf"), 2, 3, 4), (10 ** 1000, 2, 3, 4)):
             with self.subTest(angles=angles):
                 link, serial, _, _ = self.make_link()
                 link.connect()
@@ -212,7 +213,7 @@ class TransportTests(unittest.TestCase):
                     link.resume()
                 self.assertEqual(len(opened), 1)
 
-    def test_stale_ack_or_watchdog_error_is_not_accepted_as_next_reply(self):
+    def test_stale_ack_or_firmware_error_is_not_accepted_as_next_reply(self):
         for stale in (b"OK pose\n", b"ERR timeout\n"):
             with self.subTest(stale=stale):
                 link, serial, _, _ = self.make_link()
@@ -357,7 +358,7 @@ class TransportTests(unittest.TestCase):
 
     def test_unterminated_resync_reply_is_drained_with_a_finite_budget(self):
         link, serial, clock, _ = self.make_link({
-            b"\x00\n": b"ERR unfinished", b"hello\n": b"ROBOT_ARM 1 70 80 90 100\n",
+            b"\x00\n": b"ERR unfinished", b"hello\n": b"ROBOT_ARM 2 70 80 90 100\n",
         })
         self.assertEqual(link.connect(), (70, 80, 90, 100))
         self.assertEqual(serial.writes, [b"\x00\n", b"hello\n"])
@@ -370,6 +371,46 @@ class TransportTests(unittest.TestCase):
             link.connect()
         self.assertEqual(serial.writes, [b"\x00\n"])
         self.assertTrue(serial.closed)
+
+    def test_protocol_two_accepts_signed_hello_and_hold_through_int32_boundaries(self):
+        link, serial, _, _ = self.make_link({
+            b"hello\n": b"ROBOT_ARM 2 -2147483648 -270 450 2147483647\r\n",
+            b"hold\n": b"OK hold -2147483648 -1 181 2147483647\n",
+        })
+        self.assertEqual(link.connect(), (-2147483648, -270, 450, 2147483647))
+        self.assertEqual(link.hold(), (-2147483648, -1, 181, 2147483647))
+
+    def test_pose_rounds_signed_angles_without_old_travel_limits(self):
+        for angles, command in (
+            ((-270.2, 450.4, -90.8, 181.2), b"pose -270 450 -91 181\n"),
+            ((-2147483648, 2147483647, -1, 0), b"pose -2147483648 2147483647 -1 0\n"),
+            ((-2147483648.4, 2147483647.4, -0.1, 180.9), b"pose -2147483648 2147483647 0 181\n"),
+        ):
+            with self.subTest(angles=angles):
+                link, serial, _, _ = self.make_link()
+                serial.responses[command] = b"OK pose\n"
+                link.connect()
+                link.resume()
+                link.send_pose(angles)
+                self.assertEqual(serial.writes[-1], command)
+
+    def test_protocol_one_is_rejected_with_clear_incompatibility_error(self):
+        link, serial, _, _ = self.make_link({b"hello\n": b"ROBOT_ARM 1 90 90 90 90\n"})
+        with self.assertRaisesRegex(LinkError, "requires protocol 2.*reported 1"):
+            link.connect()
+        self.assertTrue(serial.closed)
+
+    def test_hold_rejects_malformed_or_non_int32_values(self):
+        for reply in (b"OK hold -2147483649 0 0 0\n", b"OK hold 2147483648 0 0 0\n",
+                      b"OK hold True 0 0 0\n", b"OK hold -1.5 0 0 0\n",
+                      b"OK hold 1e2 0 0 0\n", b"OK hold - 0 0 0\n"):
+            with self.subTest(reply=reply):
+                link, serial, _, _ = self.make_link()
+                link.connect()
+                serial.responses[b"hold\n"] = reply
+                with self.assertRaises(LinkError):
+                    link.hold()
+                self.assertTrue(serial.closed)
 
 
 if __name__ == "__main__":

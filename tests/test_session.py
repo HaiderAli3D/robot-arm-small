@@ -301,16 +301,16 @@ class SessionTests(unittest.TestCase):
                 session.nudge(pin, -5, .01)
                 self.assertEqual(session.controller.angles, (90,)*4)
 
-    def test_keyboard_direct_angles_ignore_tracking_gain_direction_and_respect_limits(self):
-        config = Config(joints=(JointConfig(minimum=88, maximum=93, direction=-1, gain=2),
+    def test_keyboard_direct_angles_ignore_tracking_gain_and_direction(self):
+        config = Config(joints=(JointConfig(direction=-1, gain=2),
                                 JointConfig(), JointConfig(), JointConfig()))
         session = Session(config)
         session.nudge(6, 5, 0)
-        self.assertEqual(session.controller.angles, (93,90,90,90))
+        self.assertEqual(session.controller.angles, (95,90,90,90))
         session.nudge(6, -5, .01)
-        self.assertEqual(session.controller.angles, (88,90,90,90))
+        self.assertEqual(session.controller.angles, (90,90,90,90))
         session.nudge(6, -5, .02)
-        self.assertEqual(session.controller.angles, (88,90,90,90))
+        self.assertEqual(session.controller.angles, (85,90,90,90))
 
     def test_keyboard_nudges_send_immediately_even_inside_camera_send_interval(self):
         device = Device()
@@ -447,9 +447,9 @@ class SessionTests(unittest.TestCase):
                 self.assertTrue(session.controller.calibrated)
                 self.assertEqual(session.controller.active, not paused)
 
-    def test_signed_positions_map_to_nonnegative_wire_angles_on_every_servo(self):
+    def test_signed_positions_map_to_extended_wire_angles_on_every_servo(self):
         for pin in (6,7,8,9):
-            for position, wire_angle in ((-90,0), (-45,45), (0,90), (90,180)):
+            for position, wire_angle in ((-360,-270), (-180,-90), (-90,0), (-45,45), (0,90), (90,180), (180,270), (360,450)):
                 with self.subTest(pin=pin, position=position):
                     device = Device()
                     session = Session(Config(), device)
@@ -472,17 +472,6 @@ class SessionTests(unittest.TestCase):
         session.set_position(7, 0, .2)
         self.assertEqual(session.controller.angles, (90,90,90,90))
 
-    def test_signed_positions_respect_configured_physical_limits(self):
-        config = Config(joints=(JointConfig(minimum=60, maximum=120),
-                                JointConfig(), JointConfig(), JointConfig()))
-        session = Session(config)
-        session.set_position(6, -90, 0)
-        self.assertEqual(session.controller.angles, (60,90,90,90))
-        self.assertEqual(session.controller.positions[0], -30)
-        session.set_position(6, 90, .1)
-        self.assertEqual(session.controller.angles, (120,90,90,90))
-        self.assertEqual(session.controller.positions[0], 30)
-
     def test_keyboard_negative_steps_report_signed_position_below_center(self):
         for pin in (6,7,8,9):
             with self.subTest(pin=pin):
@@ -493,7 +482,7 @@ class SessionTests(unittest.TestCase):
                 self.assertIn(f'IO{pin} -5 degrees', session.controller.status)
 
     def test_invalid_signed_position_does_not_change_run_mode_or_send_commands(self):
-        for position in (-90.1, 90.1, float('nan'), float('inf'), -float('inf'),
+        for position in (-2**31-91, 2**31-90, float('nan'), float('inf'), -float('inf'),
                          True, '-45', None, 10**1000):
             with self.subTest(position=position):
                 device = Device()

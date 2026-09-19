@@ -1,4 +1,5 @@
 #include "../../ESP32C5_Tracking/Controller.h"
+#include "../../ESP32C5_Tracking/Pulse.h"
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -8,23 +9,23 @@
 #define CHECK(x) do { if (!(x)) { std::cerr << __LINE__ << ": " #x "\n"; std::exit(1); } } while (0)
 struct Harness {
   std::vector<std::string> replies;
-  float outputs[4] = {};
+  int32_t outputs[4] = {};
   bool enabled[4] = {};
   unsigned writes = 0;
   robot_arm::Controller core;
   Harness(uint32_t now = 0) : core(reply, output, this) { core.begin(now); }
   static void reply(void* p, const char* s) { static_cast<Harness*>(p)->replies.emplace_back(s); }
-  static void output(void* p, unsigned i, float angle, bool enable) {
+  static void output(void* p, unsigned i, int32_t angle, bool enable) {
     auto* h = static_cast<Harness*>(p); h->outputs[i] = angle; h->enabled[i] = enable; ++h->writes;
   }
   void send(const std::string& s, uint32_t now = 0) { for (char c : s) core.receive(c, now); }
   void command(const std::string& s, uint32_t now = 0) { send(s + "\n", now); }
-  bool near(unsigned i, float value) { return std::fabs(outputs[i] - value) < 0.001f; }
+  bool near(unsigned i, int32_t value) { return outputs[i] == value; }
 };
 
 int main() {
   Harness boot;
-  CHECK(boot.replies.back() == "ROBOT_ARM 1 90 90 90 90");
+  CHECK(boot.replies.back() == "ROBOT_ARM 2 90 90 90 90");
   for (unsigned i=0; i<4; ++i) { CHECK(boot.near(i,90)); CHECK(boot.enabled[i]); }
   boot.command("pose 0 0 0 0"); CHECK(boot.replies.back() == "ERR paused");
   boot.command("resume"); CHECK(boot.replies.back() == "OK resume");
@@ -37,10 +38,10 @@ int main() {
   boot.core.tick(300); CHECK(boot.near(0,180));
   boot.command("resume",300); boot.core.tick(320); CHECK(boot.near(0,180));
   boot.command("pose 180 180 180 180",320); boot.core.tick(340); CHECK(boot.near(0,180));
-  boot.command("hello",340); CHECK(boot.replies.back() == "ROBOT_ARM 1 180 180 180 180");
+  boot.command("hello",340); CHECK(boot.replies.back() == "ROBOT_ARM 2 180 180 180 180");
   boot.core.tick(400); CHECK(boot.near(0,180));
 
-  const char* bad[] = {"pose 0 0 0 181", "pose 0 0 0 -1", "pose 1x 0 0 0", "pose +1 0 0 0", "pose 0 0 0 1.0", "pose 0 0 0 1e2", "pose 0 0 0 999999999999999999999999999", "pose 0 0 0", "pose 0 0 0 0 extra", "resume extra", "hold extra", "hello extra", "all 90 extra", "1 90x", "all -1", "5 90", "POSE 0 0 0 0"};
+  const char* bad[] = {"pose 0 0 0 2147483648", "pose 0 0 0 -2147483649", "pose 1x 0 0 0", "pose + 0 0 0", "pose 0 0 0 1.0", "pose 0 0 0 1e2", "pose 0 0 0 999999999999999999999999999", "pose 0 0 0", "pose 0 0 0 0 extra", "resume extra", "hold extra", "hello extra", "all 90 extra", "1 90x", "all --1", "5 90", "POSE 0 0 0 0"};
   for (const auto* cmd : bad) {
     Harness h; h.command("resume"); h.command(cmd);
     CHECK(h.replies.back().find("ERR ") == 0);
@@ -69,7 +70,7 @@ int main() {
   CHECK(noPose.replies.back()=="OK resume");
   noPose.command("pose 180 180 180 180",86400001); CHECK(noPose.replies.back()=="OK pose");
   Harness invalid; invalid.command("resume"); invalid.command("pose 180 180 180 180");
-  invalid.command("pose 0 0 0 181",499); invalid.core.tick(60000);
+  invalid.command("pose 0 0 0 2147483648",499); invalid.core.tick(60000);
   CHECK(invalid.replies.back()=="ERR angle"); CHECK(invalid.near(0,180));
   invalid.command("pose 0 0 0 0",60001); CHECK(invalid.replies.back()=="OK pose");
 
@@ -98,7 +99,7 @@ int main() {
   partial.send(" 0 0\n",86400001); CHECK(partial.replies.back()=="OK pose");
   partial.core.tick(86400020); CHECK(partial.near(0,0));
   Harness preserved; preserved.command("resume"); preserved.command("pose 100 100 100 100");
-  preserved.command("pose 0 0 0 181",1); preserved.core.tick(20);
+  preserved.command("pose 0 0 0 2147483648",1); preserved.core.tick(20);
   for (unsigned i=0;i<4;++i) CHECK(preserved.near(i,100));
   Harness boundaries; boundaries.command("all 0");
   for (uint32_t t=20;t<=1200;t+=20) boundaries.core.tick(t);
@@ -108,5 +109,41 @@ int main() {
   for(unsigned i=0;i<4;++i) CHECK(boundaries.near(i,180));
   Harness cr; cr.command("resume"); cr.send("pose 0 0\r 0 0\n");
   CHECK(cr.replies.back()=="ERR invalid_character"); cr.core.tick(20); CHECK(cr.near(0,90));
+  Harness signedAngles; signedAngles.command("resume");
+  signedAngles.command("pose -90 +270 -2147483648 2147483647");
+  CHECK(signedAngles.replies.back()=="OK pose"); signedAngles.core.tick(20);
+  CHECK(signedAngles.near(0,-90)); CHECK(signedAngles.near(1,270));
+  CHECK(signedAngles.near(2,INT32_MIN)); CHECK(signedAngles.near(3,INT32_MAX));
+  signedAngles.command("hold",20);
+  CHECK(signedAngles.replies.back()=="OK hold -90 270 -2147483648 2147483647");
+  signedAngles.command("hello",20);
+  CHECK(signedAngles.replies.back()=="ROBOT_ARM 2 -90 270 -2147483648 2147483647");
+  signedAngles.command("all -2147483648",20); CHECK(signedAngles.replies.back()=="OK manual");
+  signedAngles.core.tick(40);
+  for(unsigned i=0;i<4;++i) CHECK(signedAngles.near(i,INT32_MIN));
+  signedAngles.command("1 +2147483647",40); CHECK(signedAngles.replies.back()=="OK manual");
+  signedAngles.core.tick(60); CHECK(signedAngles.near(0,INT32_MAX));
+  signedAngles.command("hello",60);
+  CHECK(signedAngles.replies.back()=="ROBOT_ARM 2 2147483647 -2147483648 -2147483648 -2147483648");
+  signedAngles.command("resume",60); signedAngles.command("pose -1 -2 -0 +0",60);
+  signedAngles.core.tick(80); signedAngles.command("hold",80);
+  CHECK(signedAngles.replies.back()=="OK hold -1 -2 0 0");
+  CHECK(robot_arm::pulseMicroseconds(-90)==500.0);
+  CHECK(robot_arm::pulseMicroseconds(270)==2500.0);
+  CHECK(robot_arm::pulseMicroseconds(90)==1500.0);
+  CHECK(robot_arm::pulseDuty(-90)==410u);
+  CHECK(robot_arm::pulseDuty(270)==2048u);
+  CHECK(robot_arm::pulseDuty(90)==1229u);
+  CHECK(robot_arm::pulseDuty(INT32_MIN)==0u);
+  CHECK(robot_arm::pulseDuty(INT32_MAX)==16383u);
+  CHECK(robot_arm::pulseDuty(-180)==0u);
+  CHECK(robot_arm::pulseDuty(3420)==16383u);
+  CHECK(robot_arm::pulseMicroseconds(INT32_MIN)==0.0);
+  CHECK(robot_arm::pulseMicroseconds(INT32_MAX)==20000.0);
+  uint32_t previousDuty = 0;
+  for (int32_t position=-500;position<5000;++position) {
+    const uint32_t duty=robot_arm::pulseDuty(position);
+    CHECK(duty>=previousDuty); CHECK(duty<=16383u); previousDuty=duty;
+  }
   std::cout << "Firmware production controller tests passed\n";
 }
