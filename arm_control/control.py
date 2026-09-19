@@ -44,6 +44,10 @@ class Controller:
     def angles(self) -> tuple[float, ...]:
         return tuple(self._angles)
 
+    @property
+    def calibrating(self) -> bool:
+        return self._calibrating
+
     @staticmethod
     def _checked_angles(angles) -> list[float]:
         if len(angles) != 4 or not all(math.isfinite(v) and 0 <= v <= 180 for v in angles):
@@ -65,6 +69,7 @@ class Controller:
         self.active = False
         self.status = "Calibrate with straight right arm and wrist, open hand"
         self._calibrating = False
+        self._calibration_ready_at = None
         self._samples = []
         self._reference = None
         self._last_update = None
@@ -77,14 +82,19 @@ class Controller:
         if not math.isfinite(now):
             raise ValueError("time must be finite")
 
-    def begin_calibration(self, now: float) -> None:
+    def begin_calibration(self, now: float, delay: float = 0.0) -> None:
         self._time(now)
+        if not math.isfinite(delay) or delay < 0:
+            raise ValueError("calibration delay must be finite and nonnegative")
         self.pause("Hold neutral pose steady to calibrate")
         self.calibrated = False
         self._reference = None
         self._calibrating = True
         self._samples = []
         self._last_update = now
+        self._calibration_ready_at = now + delay
+        if delay:
+            self.status = f"Calibration starts in {math.ceil(delay)} seconds - show both hands"
 
     def pause(self, reason: str = "Paused") -> None:
         self.active = False
@@ -117,6 +127,10 @@ class Controller:
         return tuple(values)
 
     def _calibrate(self, values: tuple[float | None, ...], now: float) -> None:
+        if now < self._calibration_ready_at:
+            remaining = math.ceil(self._calibration_ready_at - now)
+            self.status = f"Calibration starts in {remaining} seconds - show both hands"
+            return
         if (any(v is None for v in values) or abs(values[1]) > 20
                 or abs(_relative(values[2], 0)) > 20
                 or values[3] <= max(0.4, self.config.pinch_closed_ratio)):

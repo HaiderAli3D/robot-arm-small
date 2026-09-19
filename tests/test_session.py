@@ -39,10 +39,44 @@ class SessionTests(unittest.TestCase):
         session = Session(Config(), device)
         if device:
             session.connect()
-        session.calibrate(0)
+        session.calibrate(-4)
         for i in range(12):
             session.step(NEUTRAL, i*.1)
         return session
+
+    def test_calibration_waits_four_seconds_before_collecting_pose(self):
+        device = Device()
+        session = Session(Config(), device)
+        session.connect()
+        session.calibrate(0)
+        self.assertIn('4 seconds', session.controller.status)
+        for tick in range(40):
+            session.step(NEUTRAL, tick / 10)
+        self.assertFalse(session.controller.calibrated)
+        self.assertIn('1 seconds', session.controller.status)
+        self.assertFalse(session.resume(3.9))
+        for tick in range(40, 50):
+            session.step(NEUTRAL, tick / 10)
+        self.assertFalse(session.controller.calibrated)
+        session.step(NEUTRAL, 5.0)
+        self.assertTrue(session.controller.calibrated)
+        self.assertFalse(session.controller.active)
+        self.assertEqual(device.commands, ['hello', 'hold'])
+
+    def test_countdown_survives_missing_hands_and_restarts_on_c(self):
+        session = Session(Config())
+        session.calibrate(0)
+        session.step(Observation(None,None,None,None), 2)
+        self.assertIn('2 seconds', session.controller.status)
+        session.calibrate(2)
+        self.assertIn('4 seconds', session.controller.status)
+        for tick in range(20, 60):
+            session.step(NEUTRAL, tick / 10)
+        self.assertFalse(session.controller.calibrated)
+        session.prepare_camera_switch()
+        for tick in range(60, 80):
+            session.step(NEUTRAL, tick / 10)
+        self.assertFalse(session.controller.calibrated)
 
     def test_connection_and_calibration_do_not_move_robot(self):
         device = Device()

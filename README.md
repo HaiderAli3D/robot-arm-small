@@ -29,9 +29,11 @@ Press **V** in the preview window to cycle to the next available camera. The app
 
 1. Keep one person in view, including the right shoulder, elbow, wrist, and both hands. Keep the hands apart so their arm associations are clear.
 2. Extend the right arm sideways so its wrist bend can be seen in the image. Keep its wrist straight and thumb/index open. Hold the left hand upright with fingers visible.
-3. Press **C**, hold that pose steadily for one second, and wait for **Calibrated**.
+3. Press **C**. A four-second countdown gives you time to show both hands. Then hold that pose steadily for one second and wait for **Calibrated**. Pressing C again restarts the countdown.
 4. Press **Space** to start. Turn the left hand like a clock hand; bend the right elbow and wrist; pinch/open the right thumb and index finger.
 5. Press **Space** to pause and hold, or **Q/Escape** to quit. The window's close button also stops control.
+
+The large status banner shows green **RUNNING** when the arm follows you, amber **PAUSED** when it is held, and blue **CALIBRATING** during the countdown and pose capture. **PREVIEW** means the servos are disconnected. Calibration finishes paused; press Space to start movement.
 
 Calibration allows up to 20 degrees of elbow/wrist departure from straight, but requires a steady pose. Large movement restarts the one-second capture. Input angles and tracking status help diagnose a missing or unstable control. Rotating the whole right forearm without bending the wrist does not change the wrist's relative angle.
 

@@ -51,7 +51,7 @@ class Session:
     def calibrate(self, now):
         self.pause()
         if self.connected:
-            self.controller.begin_calibration(now)
+            self.controller.begin_calibration(now, delay=4.0)
 
     def prepare_camera_switch(self):
         """Hold before opening another camera; its coordinate reference is new."""

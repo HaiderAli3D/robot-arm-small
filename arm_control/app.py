@@ -58,15 +58,26 @@ def _display(frame, pose, hands, matches, observation, session, inference_ms, fr
     if width < 900:
         display = cv2.resize(display, (900, round(height*900/width)))
     width = display.shape[1]
-    panel = cv2.copyMakeBorder(display, 0, 240, 0, 0, cv2.BORDER_CONSTANT, value=(25,28,28))
-    y = display.shape[0] + 25
+    panel = cv2.copyMakeBorder(display, 0, 280, 0, 0, cv2.BORDER_CONSTANT, value=(25,28,28))
+    top = display.shape[0]
     controller = session.controller
-    state = 'LIVE' if controller.active and session.link else 'PREVIEW' if session.link is None else 'PAUSED'
+    if controller.calibrating:
+        state, color = 'CALIBRATING - arm held', (220,155,65)
+    elif session.link is None:
+        state, color = 'PREVIEW - servos disconnected', (175,175,175)
+    elif controller.active and session.connected:
+        state, color = 'RUNNING - arm follows your movements', (100,220,100)
+    else:
+        state, color = 'PAUSED - arm held', (60,190,245)
+    cv2.rectangle(panel, (0,top), (width,top+52), color, -1)
+    cv2.putText(panel, state, (14,top+36), cv2.FONT_HERSHEY_SIMPLEX, .85,
+                (15,25,20), 2, cv2.LINE_AA)
+    y = top + 79
     angles = '   '.join(f'GPIO{pin} {value:5.1f}' for pin,value in zip(range(6,10),controller.angles))
     inputs = '  '.join(f'{label}: {value:.1f}' if value is not None else f'{label}: missing'
                        for label,value in zip(('L rotation','R elbow bend','R wrist bend','Pinch'),
                                               (observation.rotation,observation.elbow,observation.wrist,observation.pinch)))
-    lines = [f'{state}   Commanded degrees: {angles}', controller.status, session.connection_status,
+    lines = [controller.status, f'Commanded degrees: {angles}', session.connection_status,
              inputs,
              f'{camera_status} | inference {inference_ms:.0f} ms | frame age {frame_age*1000:.0f} ms',
              'C calibrate   SPACE start/pause   V switch camera   R reconnect   Q / ESC quit',
@@ -109,7 +120,7 @@ def run(config, args):
             session.connect()
         if not args.headless:
             cv2.namedWindow(WINDOW, cv2.WINDOW_NORMAL)
-            cv2.resizeWindow(WINDOW, config.width, config.height+205)
+            cv2.resizeWindow(WINDOW, config.width, config.height+280)
         while True:
             was_switching = selector.switching
             selector.poll()
