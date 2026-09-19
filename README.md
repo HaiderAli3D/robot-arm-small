@@ -37,16 +37,16 @@ The large status banner shows your chosen mode: green **RUNNING** or amber **PAU
 
 ### Keyboard control
 
-Focus the preview window and use these keys. Each press changes the selected servo by **5 degrees**; holding a key uses your keyboard's normal repeat rate.
+Focus the preview window and use the number pad with **Num Lock on**. Each press changes the selected servo by **5 degrees**; holding a key uses your keyboard's normal repeat rate.
 
 | Servo | Decrease | Increase |
 |---|---|---|
-| IO6 | W | E |
-| IO7 | T | Y |
-| IO8 | U | I |
-| IO9 | P | [ |
+| IO6 | Numpad 1 | Numpad 2 |
+| IO7 | Numpad 4 | Numpad 5 |
+| IO8 | Numpad 7 | Numpad 8 |
+| IO9 | Numpad 3 | Numpad 6 |
 
-Pressing a servo key selects **keyboard control**, starts movement, and sends the new angle immediately. It works without hand detection or calibration. Camera gestures cannot overwrite keyboard positions. **Space** pauses/resumes; another servo key also resumes and moves. **M** selects tracking again while retaining your run/pause choice; **C** selects tracking and starts its four-second calibration countdown. Reconnecting retains keyboard mode. Keyboard steps are direct servo degrees, independent of tracking gain and direction, with no joint travel clipping. Uppercase letters work too.
+Pressing a servo key selects **keyboard control**, starts movement, and sends the new angle immediately. It works without hand detection or calibration. Camera gestures cannot overwrite keyboard positions. **Space** pauses/resumes; another servo key also resumes and moves. **M** selects tracking again while retaining your run/pause choice; **C** selects tracking and starts its four-second calibration countdown. Reconnecting retains keyboard mode. Keyboard steps are direct servo degrees, independent of tracking gain and direction, with no joint travel clipping. The matching number-row digits also work because OpenCV receives the digit characters. The previous letter-based servo bindings are replaced.
 
 Calibration records the current servo commands and your left-hand rotation, right-elbow bend, right-wrist bend, and pinch as paired zero points. Any detected pose is accepted. Keeping the captured pose keeps all four servos at their current positions, including the claw. Later gesture changes move relative to those positions. Calibrating again replaces all four zeros with the latest positions; it does not send the arm back to centre. Keyboard steps and `Session.set_position` use the same saved zeros. Run/pause selection is preserved.
 

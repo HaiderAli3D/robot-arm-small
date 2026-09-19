@@ -126,3 +126,11 @@ Calibration now captures both the current commanded servo positions and all four
 All 169 Python tests pass. Coverage includes calibration from non-centre/extended positions while paused and running, no movement on capture or an unchanged pose, repeated recalibration, relative pinch, 4x elbow/wrist response using the actual project config, keyboard positions after zeroing, reconnect preservation, and signed32 boundaries. Independent review identified unencodable numeric targets after adding calibration offsets; those channels now retain valid outputs and report the encoding error without pausing or disconnecting other channels. No physical travel clamp was added.
 
 Restarted the app on COM70/camera 1 and verified responsive live Camo video, connected status, and the new Positions (from zero) label. The board retained non-centred positions on reconnect; calibration can now use those positions as its zero. Physical gesture response under the higher gain remains for operator assessment. No firmware upload was needed.
+
+## Follow-up: numpad servo controls
+
+Replaced the letter-based motor keys with numpad digit pairs: 1/2 for IO6, 4/5 for IO7, 7/8 for IO8, and 3/6 for IO9. The first key subtracts five servo degrees and the second adds five. Num Lock must be on; number-row digits also work through OpenCV's character input. Existing Space, C, M, V, R, and Q/Escape controls are unchanged. The preview legend and README show the new bindings.
+
+All 169 Python tests pass, including updated keyboard/tracking-mode regressions. An additional isolated run through the actual app key handler verified each of the eight digits independently against its requested pin and direction, without sending physical movement commands. This is a host-only remap; firmware is unchanged.
+
+Restarted on COM70/camera 1 and verified a responsive window, live Camo video, connected status, and the numpad key legend.
