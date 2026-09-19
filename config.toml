@@ -22,16 +22,16 @@ direction = 1
 gain = 1
 
 [joints.gpio7]
-# Right elbow bend.
+# Right elbow bend: four servo degrees per degree of arm movement.
 direction = 1
-gain = 1
+gain = 4
 
 [joints.gpio8]
-# Right wrist bend.
+# Right wrist bend: four servo degrees per degree of wrist movement.
 direction = 1
-gain = 1
+gain = 4
 
 [joints.gpio9]
 direction = 1
-# Double claw response: ratios 0.6 and 0.2 request signed -90 and -180.
+# Double claw response, relative to the pinch captured during calibration.
 gain = 2

@@ -110,13 +110,15 @@ class ControllerTests(unittest.TestCase):
                 self.assertIn(explanation, c.status)
                 self.assertFalse(c.calibrated)
 
-    def test_pinched_calibration_never_divides_by_zero_and_claw_still_opens(self):
+    def test_pinched_calibration_preserves_claw_then_tracks_relative_change(self):
         for ratio in (0,.2,.20000001,.4):
             c = calibrated(observation=Observation(0,90,60,ratio))
-            closed = advance(c,Observation(0,90,60,.2))
-            self.assertAlmostEqual(closed[3],0)
-            opened = advance(c,Observation(0,90,60,1),start=3.1)
-            self.assertAlmostEqual(opened[3],90)
+            self.assertEqual(advance(c,Observation(0,90,60,ratio))[3],90)
+            reference_closure = max(0,min(1,(1-ratio)/.8))
+            closed = advance(c,Observation(0,90,60,.2),start=3.1)
+            self.assertAlmostEqual(closed[3],90-90*(1-reference_closure))
+            opened = advance(c,Observation(0,90,60,1),start=5.1)
+            self.assertAlmostEqual(opened[3],90+90*reference_closure)
             self.assertTrue(all(math.isfinite(v) for v in opened))
 
     def test_no_slew_cap_and_optional_smoothing(self):
@@ -264,6 +266,78 @@ class ControllerTests(unittest.TestCase):
         c = Controller(Config())
         c.sync_angles((-270,-90,270,450))
         self.assertEqual(c.positions,(-360,-180,180,360))
+
+    def test_calibration_zeros_current_servo_pose_without_moving_any_joint(self):
+        for running in (False,True):
+            with self.subTest(running=running):
+                c = Controller(Config(smoothing_tau=0,deadband=0))
+                held = (130,-45,230,35)
+                c.sync_angles(held)
+                if running: c.resume(0,capture_reference=False)
+                c.begin_calibration(0,delay=4)
+                pose = Observation(20,80,-25,.6)
+                c.update(pose,3.9)
+                self.assertEqual(c.positions,(40,-135,140,-55))
+                self.assertEqual(c.update(pose,4),held)
+                self.assertEqual(c.zero_angles,held)
+                self.assertEqual(c.positions,(0,0,0,0))
+                self.assertEqual(c.active,running)
+                c.resume(4)
+                self.assertEqual(c.update(pose,4.1),held)
+                moved = c.update(Observation(30,90,-35,.8),4.2)
+                for actual,expected in zip(moved,(140,-35,220,57.5)):
+                    self.assertAlmostEqual(actual,expected)
+                self.assertEqual(c.update(pose,4.3),held)
+
+    def test_recalibration_uses_latest_position_without_accumulating_old_zero(self):
+        c = calibrated()
+        c.update(Observation(20,30,40,.6),1.2)
+        held = c.angles
+        c.begin_calibration(2)
+        pose = Observation(-10,60,25,.4)
+        c.update(pose,2)
+        self.assertEqual(c.zero_angles,held)
+        self.assertEqual(c.positions,(0,0,0,0))
+        self.assertEqual(c.update(pose,2.1),held)
+        c.sync_angles((110,140,160,25))
+        self.assertEqual(c.zero_angles,held)
+        c.begin_calibration(3)
+        c.update(pose,3)
+        self.assertEqual(c.zero_angles,(110,140,160,25))
+        self.assertEqual(c.positions,(0,0,0,0))
+
+    def test_project_elbow_and_wrist_are_four_times_more_sensitive(self):
+        config = load_config(Path(__file__).resolve().parents[1]/'config.toml')
+        c = calibrated(replace(config,smoothing_tau=0,deadband=0),Observation(0,45,0,1))
+        self.assertEqual(c.update(Observation(0,50,0,1),1.2),(90,110,90,90))
+        self.assertEqual(c.update(Observation(0,45,-5,1),1.3),(90,90,70,90))
+
+    def test_unencodable_tracking_keeps_channel_valid_and_running(self):
+        for edge,step in ((2**31-1,1),(-(2**31),-1)):
+            with self.subTest(edge=edge):
+                c = Controller(Config(smoothing_tau=0,deadband=0))
+                c.sync_angles((90,edge,90,90))
+                c.begin_calibration(0)
+                c.update(Observation(0,90,0,1),0)
+                c.resume(0)
+                c.update(Observation(5,90+step,0,1),.1)
+                self.assertEqual(c.angles,(95,edge,90,90))
+                self.assertIn('IO7',c.status)
+                self.assertIn('integer',c.status)
+                self.assertTrue(c.active)
+                c.update(Observation(0,90-step,0,1),.2)
+                self.assertEqual(c.angles,(90,edge-step,90,90))
+                self.assertNotIn('integer',c.status)
+
+    def test_relative_pinch_encoding_overflow_never_corrupts_output(self):
+        c = Controller(Config(claw_closed=-(2**31),smoothing_tau=0,deadband=0))
+        c.begin_calibration(0)
+        c.update(Observation(0,0,0,.2),0)
+        c.resume(0)
+        c.update(Observation(0,0,0,1),.1)
+        self.assertEqual(c.angles,(90,)*4)
+        self.assertIn('IO9',c.status)
+        self.assertTrue(c.active)
 
 
 if __name__ == "__main__":

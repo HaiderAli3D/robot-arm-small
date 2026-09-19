@@ -22,12 +22,11 @@ def _relative(value: float, reference: float) -> float:
 class Controller:
     """Map rotation/elbow/wrist to GPIO6/7/8 and pinch to GPIO9.
 
-    Claw target is open + direction * gain * closure * (closed - open),
-    without joint travel clipping. Closure is 0 at pinch_open_ratio
-    and 1 at pinch_closed_ratio; reversing direction reverses travel.
-
-    Calibration snapshots any complete tracked pose after the countdown.
-    Only the arm/wrist zero points depend on that pose; pinch is absolute.
+    Calibration snapshots any complete tracked pose and the current servo
+    commands after the countdown. Every output then moves relative to its
+    captured position; calibration itself never recentres the robot.
+    Pinch uses the change in normalized closure, scaled by the configured
+    open/closed span and gain, without joint travel clipping.
     Tracking loss and calibration never change the user's run/pause state.
     """
 
@@ -41,8 +40,13 @@ class Controller:
 
     @property
     def positions(self) -> tuple[float, ...]:
-        """Signed positions about servo centre; transport uses position + 90."""
-        return tuple(angle - 90.0 for angle in self._angles)
+        """Signed positions relative to the most recently captured servo zeros."""
+        return tuple(angle - zero for angle, zero in zip(self._angles,self._zero_angles))
+
+    @property
+    def zero_angles(self) -> tuple[float, ...]:
+        """Raw protocol angles represented by displayed zero on each servo."""
+        return self._zero_angles
 
     @property
     def calibrating(self) -> bool:
@@ -66,6 +70,7 @@ class Controller:
         """Forget calibration and synchronize with actual held device outputs."""
         self._angles = self._checked_angles(angles)
         self._filtered = list(self._angles)
+        self._zero_angles = (90.0,) * 4
         self.calibrated = False
         self.active = False
         self.status = "SPACE to run; C to set a reference pose"
@@ -142,10 +147,17 @@ class Controller:
         if problem:
             self.status = problem
             return
-        self._reference = values[:3]
+        self._reference = values
+        self._zero_angles = tuple(self._angles)
+        self._filtered = list(self._angles)
         self.calibrated = True
         self._calibrating = False
-        self.status = "Reference saved - running" if self.active else "Calibrated - press SPACE to start"
+        self.status = "Current positions zeroed - running" if self.active else "Current positions zeroed - SPACE to start"
+
+    def _closure(self, pinch: float) -> float:
+        closure = ((self.config.pinch_open_ratio - pinch)
+                   / (self.config.pinch_open_ratio - self.config.pinch_closed_ratio))
+        return max(0.0,min(1.0,closure))
 
     def update(self, observation: Observation, now: float) -> tuple[float, ...]:
         self._time(now)
@@ -160,6 +172,7 @@ class Controller:
             return self.angles
         self.status = "Running - tracking" if complete else "Running - waiting for missing tracking; last angles held"
         alpha = 1.0 if self.config.smoothing_tau == 0 else -math.expm1(-dt / self.config.smoothing_tau)
+        unencodable = []
         # Observations are rotation/elbow/wrist/pinch; servo pins are
         # GPIO6 rotation, GPIO7 elbow, GPIO8 wrist, GPIO9 claw.
         for i, source in enumerate((0, 1, 2, 3)):
@@ -169,17 +182,25 @@ class Controller:
                 continue
             joint = self.config.joints[i]
             if i == 3:
-                closure = ((self.config.pinch_open_ratio - value)
-                           / (self.config.pinch_open_ratio - self.config.pinch_closed_ratio))
-                closure = max(0.0, min(1.0, closure))
-                target = self.config.claw_open + joint.direction * joint.gain * closure * (self.config.claw_closed - self.config.claw_open)
+                closure_change = self._closure(value) - self._closure(self._reference[3])
+                target = (self._zero_angles[i] + joint.direction * joint.gain * closure_change
+                          * (self.config.claw_closed - self.config.claw_open))
             else:
                 relative = (value - self._reference[source] if source == 1
                             else _relative(value, self._reference[source]))
-                target = 90.0 + joint.direction * joint.gain * relative
+                target = self._zero_angles[i] + joint.direction * joint.gain * relative
+            # Protocol representation only: do not corrupt a valid output or
+            # disconnect the other channels when a numeric target cannot encode.
+            if not -(2**31) <= target <= 2**31 - 1:
+                self._filtered[i] = self._angles[i]
+                unencodable.append(f'IO{i+6}')
+                continue
             if abs(target - self._angles[i]) <= self.config.deadband:
                 self._filtered[i] = self._angles[i]
                 continue
             self._filtered[i] += alpha * (target - self._filtered[i])
             self._angles[i] = self._filtered[i]
+        if unencodable:
+            self.status = ('Running - ' + ', '.join(unencodable)
+                           + ' exceeds protocol integer range; target unchanged')
         return self.angles

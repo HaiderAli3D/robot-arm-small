@@ -98,7 +98,7 @@ def _display(frame, pose, hands, matches, observation, session, inference_ms, fr
     inputs = '  '.join(f'{label}: {value:.1f}' if value is not None else f'{label}: missing'
                        for label,value in zip(('IO6 rotation','IO7 elbow','IO8 wrist','IO9 pinch'),
                                               (observation.rotation,observation.elbow,observation.wrist,observation.pinch)))
-    lines = [f'Positions (0 = centre): {angles}', session.connection_status,
+    lines = [f'Positions (from zero): {angles}', session.connection_status,
              inputs,
              f'{camera_status} | inference {inference_ms:.0f} ms | frame age {frame_age*1000:.0f} ms',
              'C calibrate   SPACE start/pause   V switch camera   R reconnect   Q / ESC quit',

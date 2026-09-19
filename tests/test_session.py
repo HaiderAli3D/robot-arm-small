@@ -504,6 +504,86 @@ class SessionTests(unittest.TestCase):
                 self.assertEqual(session.controller.angles, (90,)*4)
                 self.assertFalse(session.controller.active)
 
+    def prepare_manual_zero(self, device=None):
+        session = Session(Config(), device)
+        if device:
+            session.connect()
+        for pin, position in ((6,-30), (7,45), (8,120), (9,-15)):
+            session.set_position(pin, position, 0)
+        session.calibrate(1)
+        reference = Observation(-45,40,20,.6)
+        session.step(reference, 5)
+        return session, reference
+
+    def test_calibration_sets_all_current_manual_servo_angles_as_displayed_zero(self):
+        session, reference = self.prepare_manual_zero()
+        self.assertEqual(session.controller.angles, (60,135,210,75))
+        self.assertEqual(session.controller.zero_angles, (60,135,210,75))
+        self.assertEqual(session.controller.positions, (0,0,0,0))
+        self.assertTrue(session.controller.active)
+        self.assertTrue(session.controller.calibrated)
+        session.step(reference, 5.1)
+        self.assertEqual(session.controller.angles, (60,135,210,75))
+        self.assertEqual(session.controller.positions, (0,0,0,0))
+
+    def test_zero_and_signed_targets_use_each_calibrated_servo_origin(self):
+        device = Device()
+        session, _ = self.prepare_manual_zero(device)
+        for pin, zero in ((6,60), (7,135), (8,210), (9,75)):
+            for position in (-45,30,0):
+                with self.subTest(pin=pin, position=position):
+                    session.set_position(pin, position, 5.1)
+                    expected = [60,135,210,75]
+                    expected[pin-6] = zero + position
+                    self.assertEqual(session.controller.angles, tuple(expected))
+                    self.assertEqual(device.commands[-1], tuple(expected))
+                    self.assertEqual(session.controller.positions[pin-6], position)
+                    self.assertEqual(session.controller.zero_angles, (60,135,210,75))
+
+    def test_keyboard_steps_after_calibration_are_relative_to_saved_zero(self):
+        session, _ = self.prepare_manual_zero()
+        session.nudge(7, 5, 5.1)
+        session.nudge(8, -5, 5.2)
+        self.assertEqual(session.controller.angles, (60,140,205,75))
+        self.assertEqual(session.controller.positions, (0,5,-5,0))
+        self.assertEqual(session.controller.zero_angles, (60,135,210,75))
+        self.assertIn('IO8 -5 degrees', session.controller.status)
+
+    def test_reconnect_syncs_raw_angles_without_replacing_calibrated_zero(self):
+        device = Device()
+        session, _ = self.prepare_manual_zero(device)
+        device.connect_angles = (63,132,217,70)
+        session.connect()
+        self.assertEqual(session.controller.angles, (63,132,217,70))
+        self.assertEqual(session.controller.zero_angles, (60,135,210,75))
+        self.assertEqual(session.controller.positions, (3,-3,7,-5))
+        self.assertTrue(session.controller.calibrated)
+        self.assertTrue(session.controller.active)
+        session.set_position(7, 0, 5.1)
+        self.assertEqual(device.commands[-1], (63,135,217,70))
+
+    def test_protocol_limits_are_relative_to_calibrated_zero_and_invalid_target_is_atomic(self):
+        for zero, boundary, valid_position, invalid_position in (
+            (-100, 2147483647, 2147483747, 2147483748),
+            (200, -2147483648, -2147483848, -2147483849),
+        ):
+            with self.subTest(zero=zero):
+                device = Device()
+                session = Session(Config(), device)
+                session.connect()
+                session.set_position(6, zero-90, 0)
+                session.calibrate(1)
+                session.step(NEUTRAL, 5)
+                session.set_position(6, valid_position, 5.1)
+                self.assertEqual(session.controller.angles[0], boundary)
+                self.assertEqual(session.controller.positions[0], valid_position)
+                before = (session.controller.angles, session.control_mode,
+                          session.controller.active, list(device.commands))
+                with self.assertRaises(ValueError):
+                    session.set_position(6, invalid_position, 5.2)
+                self.assertEqual((session.controller.angles, session.control_mode,
+                                  session.controller.active, device.commands), before)
+
 
 if __name__ == '__main__':
     unittest.main()
