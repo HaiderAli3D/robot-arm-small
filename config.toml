@@ -12,7 +12,8 @@ claw_open = 90
 claw_closed = 0
 pinch_closed_ratio = 0.2
 pinch_open_ratio = 1.0
-smoothing_tau = 0.12
+# Two-second time constant for all four tracked servo movements.
+smoothing_tau = 2.0
 deadband = 1.0
 
 # No joint travel clipping. Values are nominal pulse coordinates.

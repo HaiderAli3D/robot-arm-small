@@ -196,3 +196,11 @@ Restarted on COM70/camera 1 and verified responsive live Camo video and connecte
 Reduced supplied GPIO9 pinch gain from 100 to 5. GPIO6/7/8 stay at gain 4, and keyboard steps remain 7 degrees. Updated the existing project-config regression to verify the reduced proportional response and return to calibrated zero. All 196 Python tests pass. No firmware change or automatic recentering is included.
 
 On restart the live UI revealed a stale GPIO9 command of -8467 relative to boot centre (raw -8377). The firmware pulse mapping saturates this at zero duty, explaining why gain adjustment alone would not recover claw motion. Performed a one-time recovery over COM70: read raw targets (167,95,106,-8377), sent (167,95,106,90), and confirmed that exact tuple via hold. Only GPIO9's target changed, returning it to its normal open command. This recovery is not new automatic centering behavior. Restarted the app afterward with gain 5.
+
+## Follow-up: two-second tracking smoothing
+
+Changed supplied `smoothing_tau` from 0.12 to 2.0 seconds for all four tracked channels. The existing elapsed-time exponential filter starts responding immediately: a sustained target change reaches approximately 63% after two seconds and 95% after six seconds. Keyboard stepping and the current gains are unchanged.
+
+All 196 Python tests pass. A direct check using the actual supplied configuration verified the two-second response on rotation, elbow, wrist, and pinch: raw outputs (115.2848,115.2848,115.2848,61.5546) from centred outputs toward targets (130,130,130,45). Firmware is unchanged.
+
+Restarted on COM70/camera 1 and verified live Camo video and connected status with the new smoothing configuration.
