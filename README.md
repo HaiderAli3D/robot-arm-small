@@ -4,12 +4,12 @@ Track your arms and hands locally with MediaPipe, then send four servo positions
 
 | Servo signal | Control | Neutral |
 |---|---|---|
-| GPIO6 | Left hand turning like a clock hand in the camera preview | 90 degrees |
-| GPIO7 | Right hand bending relative to the forearm in the camera view | 90 degrees, wrist straight |
-| GPIO8 | Right elbow bending | 90 degrees, arm straight |
-| GPIO9 | Right thumb/index pinch | 90 degrees, claw open |
+| GPIO6 | Left hand turning like a clock hand in the camera preview | 0 degrees at captured reference |
+| GPIO7 | Right elbow bending | 0 degrees at captured reference |
+| GPIO8 | Right wrist bending relative to the forearm | 0 degrees at captured reference |
+| GPIO9 | Right thumb/index pinch | 0 degrees open, -90 degrees closed |
 
-The robot's horns/linkages must already be aligned so **90 degrees on all four channels means straight arm and open claw**. Firmware commands this pose at boot. There are no joint-position sensors: every displayed angle is a commanded pulse position, not measured mechanical feedback. The tracking firmware retains the working sample's PWM and pin assignments. Your newer `RELATIVE-CW-v4` sample remains unchanged under `ESP32C5_FourServos`; the app uses the separate `ESP32C5_Tracking` sketch.
+The app displays **signed positions from -90 to +90 degrees**, with 0 at servo centre. Firmware still uses its existing 0..180 commands: signed position + 90 = firmware angle. Boot centres all channels (displayed 0); the linkages are assumed aligned for a straight arm and open claw there. There are no joint-position sensors: displayed values are commands, not measured mechanical feedback. This coordinate change does not extend the servos' physical travel. The user's `RELATIVE-CW-v4` sample remains unchanged under `ESP32C5_FourServos`; the app uses the separate `ESP32C5_Tracking` sketch.
 
 ## Quick start on this laptop
 
@@ -25,7 +25,7 @@ Setup creates `.venv`, installs the locked Windows dependencies, and downloads t
 
 In the preview:
 
-Press **V** in the preview window to cycle to the next available camera. The app checks camera indices 0–3, skips unavailable devices, and keeps the current camera if no alternative is found. Camera switching preserves your run/pause choice and reference pose. Camera selection applies to the current run; change `camera` in `config.toml` to set the startup default.
+Press **V** in the preview window to cycle to the next available camera. The app checks camera indices 0-3, skips unavailable devices, and keeps the current camera if no alternative is found. Camera switching preserves your run/pause choice and reference pose. Camera selection applies to the current run; change `camera` in `config.toml` to set the startup default.
 
 1. Keep one person in view, including the right shoulder, elbow, wrist, and both hands. Keep the hands apart so their arm associations are clear.
 2. Choose any comfortable pose with your right arm and both hands visible. Your elbow and wrist can be bent, and your fingers can be open or pinched.
@@ -48,7 +48,7 @@ Focus the preview window and use these keys. Each press changes the selected ser
 
 Pressing a servo key selects **keyboard control**, starts movement, and sends the new angle immediately. It works without hand detection or calibration. Camera gestures cannot overwrite keyboard positions. **Space** pauses/resumes; another servo key also resumes and moves. **M** selects tracking again while retaining your run/pause choice; **C** selects tracking and starts its four-second calibration countdown. Reconnecting retains keyboard mode. Keyboard steps are direct servo degrees, independent of tracking gain and direction, within the configured joint ranges. Uppercase letters work too.
 
-Calibration records the left-hand rotation, right-elbow bend, and right-wrist bend as software zero points. Subsequent changes from those angles control GPIO6–8 around 90 degrees. Any detected pose is accepted. A new reference takes effect automatically if running, or waits for Space if paused. Rotating the whole right forearm without bending the wrist does not change the wrist's relative angle.
+Calibration records left-hand rotation, right-elbow bend, and right-wrist bend as software zero points for GPIO6, GPIO7, and GPIO8. Any detected pose is accepted. A new reference takes effect automatically if running, or waits for Space if paused. Rotating the whole right forearm without bending the wrist does not change the wrist's relative angle. Claw control uses absolute pinch separation independently of the reference.
 
 If calibration waits after the countdown, the instruction beneath the banner identifies a hand or joint the camera cannot currently track. Keep your right arm and both hands visible and apart. Missing or invalid tracking cannot supply a reference angle; your actual pose is never rejected for being bent or pinched.
 
@@ -89,9 +89,9 @@ The retained 50Hz, 14-bit PWM maps nominal 0..180 degrees to 1000..2000 microsec
 
 GPIO9 defaults to open=90, closed=0. Set `claw_closed` to the tested closed position (including 180 if that matches your linkage) and keep it inside GPIO9's limits. Pinch closure is proportional to thumb/index separation divided by palm width: `pinch_closed_ratio = 0.2` sets fully closed and `pinch_open_ratio = 1.0` sets fully open. These thresholds are independent of calibration and can be adjusted for your hand. Calibrating with pinched fingers is valid; once you press Space the claw follows your pinch. Do not reverse both the claw endpoint and its direction unless you intend that combined effect.
 
-The supplied configuration sets `[joints.gpio9] gain = 2` for twice the claw response. With the current endpoints, a pinch ratio of 0.8 commands 45 degrees and 0.6 commands fully closed at 0 degrees; 1.0 or higher opens to 90. GPIO7 now controls wrist bend and GPIO8 controls elbow bend, matching the revised wiring assignment.
+The supplied configuration sets `[joints.gpio9] gain = 2` for twice the claw response. In signed display coordinates, a pinch ratio of 0.8 commands -45 degrees, 0.6 commands fully closed at -90, and 1.0 or higher opens to 0. GPIO7 controls elbow bend and GPIO8 controls wrist bend.
 
-The servo protocol accepts finite nominal angles in 0..180. There is no firmware or app speed cap; firmware applies each target on its next 50Hz output tick. Optional `smoothing_tau` and `deadband` filter tracking jitter. Narrower configured joint ranges apply to tracking; manual commands use the full protocol range. Physical travel may differ from nominal degrees. The obsolete `max_speed` and `loss_timeout` settings have been removed.
+The servo protocol and the `minimum`, `maximum`, `claw_open`, and `claw_closed` configuration values remain in raw 0..180 coordinates. UI positions and `Session.set_position(pin, position, now)` use signed -90..90 coordinates. There is no firmware or app speed cap; firmware applies each target on its next 50Hz output tick. Optional `smoothing_tau` and `deadband` filter tracking jitter. Narrower configured joint ranges apply to tracking and keyboard commands. The obsolete `max_speed` and `loss_timeout` settings have been removed.
 
 ## Loss of tracking, pause, and reconnect
 

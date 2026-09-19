@@ -1,5 +1,7 @@
 """Coordinate calibrated tracking with the firmware's held output state."""
 
+from numbers import Real
+
 from .config import Config
 from .control import Controller, Observation
 from .transport import LinkError
@@ -59,7 +61,7 @@ class Session:
             self.controller.status = 'Tracking selected - SPACE to run'
 
     def nudge(self, pin, delta, now):
-        if isinstance(pin, bool) or pin not in range(6,10):
+        if isinstance(pin, bool) or not isinstance(pin, int) or pin not in range(6,10):
             raise ValueError('servo pin must be GPIO6..GPIO9')
         self.controller.nudge(pin - 6, delta)
         self.control_mode = 'keyboard'
@@ -70,8 +72,16 @@ class Session:
                 self.link.send_pose(self.controller.angles)
             except LinkError as error:
                 self._fault(error)
-        self.controller.status = f'Keyboard: IO{pin} {self.controller.angles[pin-6]:.0f} degrees - M for tracking'
+        self.controller.status = f'Keyboard: IO{pin} {self.controller.positions[pin-6]:.0f} degrees - M for tracking'
         self._next_send = now + 1 / self.config.send_hz
+
+    def set_position(self, pin, position, now):
+        """Select a signed -90..90 degree position using the normal manual path."""
+        if isinstance(pin, bool) or not isinstance(pin, int) or pin not in range(6,10):
+            raise ValueError('servo pin must be GPIO6..GPIO9')
+        if isinstance(position, bool) or not isinstance(position, Real) or not -90 <= position <= 90:
+            raise ValueError('servo position must be a finite number in -90..90 degrees')
+        return self.nudge(pin, position - self.controller.positions[pin-6], now)
 
     def prepare_camera_switch(self):
         """Camera selection leaves the run latch and reference pose intact."""

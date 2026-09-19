@@ -93,11 +93,11 @@ def _display(frame, pose, hands, matches, observation, session, inference_ms, fr
         cv2.putText(panel, part, (14,y), cv2.FONT_HERSHEY_SIMPLEX, .67,
                     (245,245,245), 2, cv2.LINE_AA)
         y += 29
-    angles = '   '.join(f'GPIO{pin} {value:5.1f}' for pin,value in zip(range(6,10),controller.angles))
+    angles = '   '.join(f'IO{pin} {value:+6.1f}' for pin,value in zip(range(6,10),controller.positions))
     inputs = '  '.join(f'{label}: {value:.1f}' if value is not None else f'{label}: missing'
-                       for label,value in zip(('IO6 rotation','IO8 elbow','IO7 wrist','IO9 pinch'),
+                       for label,value in zip(('IO6 rotation','IO7 elbow','IO8 wrist','IO9 pinch'),
                                               (observation.rotation,observation.elbow,observation.wrist,observation.pinch)))
-    lines = [f'Commanded degrees: {angles}', session.connection_status,
+    lines = [f'Positions (0 = centre): {angles}', session.connection_status,
              inputs,
              f'{camera_status} | inference {inference_ms:.0f} ms | frame age {frame_age*1000:.0f} ms',
              'C calibrate   SPACE start/pause   V switch camera   R reconnect   Q / ESC quit',

@@ -224,8 +224,8 @@ class SessionTests(unittest.TestCase):
         angles = session.controller.angles
         session.step(Observation(None,30,None,1), 1.2)
         self.assertEqual(session.controller.angles[0], angles[0])
-        self.assertEqual(session.controller.angles[1], angles[1])
-        self.assertGreater(session.controller.angles[2], angles[2])
+        self.assertGreater(session.controller.angles[1], angles[1])
+        self.assertEqual(session.controller.angles[2], angles[2])
         self.assertTrue(session.controller.active)
 
     def test_large_frame_gap_does_not_pause_or_discard_reference(self):
@@ -446,6 +446,74 @@ class SessionTests(unittest.TestCase):
                 session.step(NEUTRAL, 4.1)
                 self.assertTrue(session.controller.calibrated)
                 self.assertEqual(session.controller.active, not paused)
+
+    def test_signed_positions_map_to_nonnegative_wire_angles_on_every_servo(self):
+        for pin in (6,7,8,9):
+            for position, wire_angle in ((-90,0), (-45,45), (0,90), (90,180)):
+                with self.subTest(pin=pin, position=position):
+                    device = Device()
+                    session = Session(Config(), device)
+                    session.connect()
+                    session.set_position(pin, position, 0)
+                    expected = [90,90,90,90]
+                    expected[pin-6] = wire_angle
+                    self.assertEqual(session.controller.angles, tuple(expected))
+                    self.assertEqual(device.commands[-1], tuple(expected))
+                    self.assertEqual(session.controller.positions[pin-6], position)
+                    self.assertEqual(session.control_mode, 'keyboard')
+                    self.assertTrue(session.controller.active)
+                    self.assertFalse(session.controller.calibrated)
+
+    def test_set_position_is_absolute_after_prior_keyboard_movement(self):
+        session = Session(Config())
+        session.nudge(7, 20, 0)
+        session.set_position(7, -45, .1)
+        self.assertEqual(session.controller.angles, (90,45,90,90))
+        session.set_position(7, 0, .2)
+        self.assertEqual(session.controller.angles, (90,90,90,90))
+
+    def test_signed_positions_respect_configured_physical_limits(self):
+        config = Config(joints=(JointConfig(minimum=60, maximum=120),
+                                JointConfig(), JointConfig(), JointConfig()))
+        session = Session(config)
+        session.set_position(6, -90, 0)
+        self.assertEqual(session.controller.angles, (60,90,90,90))
+        self.assertEqual(session.controller.positions[0], -30)
+        session.set_position(6, 90, .1)
+        self.assertEqual(session.controller.angles, (120,90,90,90))
+        self.assertEqual(session.controller.positions[0], 30)
+
+    def test_keyboard_negative_steps_report_signed_position_below_center(self):
+        for pin in (6,7,8,9):
+            with self.subTest(pin=pin):
+                session = Session(Config())
+                session.nudge(pin, -5, 0)
+                self.assertEqual(session.controller.angles[pin-6], 85)
+                self.assertEqual(session.controller.positions[pin-6], -5)
+                self.assertIn(f'IO{pin} -5 degrees', session.controller.status)
+
+    def test_invalid_signed_position_does_not_change_run_mode_or_send_commands(self):
+        for position in (-90.1, 90.1, float('nan'), float('inf'), -float('inf'),
+                         True, '-45', None, 10**1000):
+            with self.subTest(position=position):
+                device = Device()
+                session = Session(Config(), device)
+                session.connect()
+                with self.assertRaises(ValueError):
+                    session.set_position(6, position, 0)
+                self.assertEqual(session.controller.angles, (90,)*4)
+                self.assertFalse(session.controller.active)
+                self.assertEqual(session.control_mode, 'tracking')
+                self.assertEqual(device.commands, ['hello'])
+
+    def test_signed_positions_reject_non_servo_pins_before_mutation(self):
+        for pin in (5,10,True,6.0,'6'):
+            with self.subTest(pin=pin):
+                session = Session(Config())
+                with self.assertRaises(ValueError):
+                    session.set_position(pin, -45, 0)
+                self.assertEqual(session.controller.angles, (90,)*4)
+                self.assertFalse(session.controller.active)
 
 
 if __name__ == '__main__':

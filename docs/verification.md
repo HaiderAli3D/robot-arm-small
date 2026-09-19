@@ -84,3 +84,11 @@ All **120 Python tests** pass. Independent elbow-only and wrist-only input tests
 Added W/E for IO6, T/Y for IO7, U/I for IO8, and P/[ for IO9; the first key decreases and the second increases by five nominal degrees. A servo key selects keyboard mode, starts control, and sends immediately. Camera observations cannot change targets in keyboard mode. M returns to tracking, C selects tracking and calibrates, and Space pauses/resumes either mode. Keyboard control works without camera detection/calibration and survives reconnects.
 
 All **134 Python tests** pass, including all eight keys, uppercase input, actual pin order, direct increments independent of tracking gain, immediate serial sends, camera isolation, manual pause/resume, offline/reconnect behavior, and transitions back to tracking. Restarted the full app on COM70 and camera 1. Firmware is unchanged.
+
+## Follow-up: corrected elbow/wrist mapping and signed positions
+
+At the user's corrected request, GPIO7 follows right elbow bend and GPIO8 follows right wrist bend. GPIO6 left-hand rotation and GPIO9 pinch retain their assignments. Removed the pending shoulder-control implementation. Calibration still accepts any complete detected pose after four seconds, and running stays selected until explicit pause. Keyboard pairs remain W/E, T/Y, U/I, and P/[ for GPIO6 through GPIO9.
+
+All four displayed positions and the new Session.set_position API use -90..+90 degrees around center (0). The existing firmware protocol remains 0..180; signed positions translate by adding 90. Physical travel and pulse widths are unchanged. Tests cover signed commands on every pin, invalid inputs, keyboard steps below center, per-joint limits, independent elbow/wrist mapping, and retained calibration/run behavior.
+
+All 140 Python tests pass; independent code review found no actionable defects. Restarted the full application on COM70 and camera 1 and observed the corrected IO7 elbow / IO8 wrist labels, signed outputs, and connected paused status. The preview was black during this check, so live gesture-to-servo movement was not verified. Firmware is unchanged and was not reflashed. Runtime logs and the own-window screenshot remain in ignored artifacts/.

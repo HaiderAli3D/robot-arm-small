@@ -19,7 +19,7 @@ def _relative(value: float, reference: float) -> float:
 
 
 class Controller:
-    """Map rotation/wrist/elbow to GPIO6/7/8 and pinch to GPIO9.
+    """Map rotation/elbow/wrist to GPIO6/7/8 and pinch to GPIO9.
 
     Claw target is open + direction * gain * closure * (closed - open),
     clamped to configured joint bounds. Closure is 0 at pinch_open_ratio
@@ -37,6 +37,11 @@ class Controller:
     @property
     def angles(self) -> tuple[float, ...]:
         return tuple(self._angles)
+
+    @property
+    def positions(self) -> tuple[float, ...]:
+        """Signed positions about servo centre; transport uses position + 90."""
+        return tuple(angle - 90.0 for angle in self._angles)
 
     @property
     def calibrating(self) -> bool:
@@ -153,8 +158,8 @@ class Controller:
         self.status = "Running - tracking" if complete else "Running - waiting for missing tracking; last angles held"
         alpha = 1.0 if self.config.smoothing_tau == 0 else -math.expm1(-dt / self.config.smoothing_tau)
         # Observations are rotation/elbow/wrist/pinch; servo pins are
-        # GPIO6 rotation, GPIO7 wrist, GPIO8 elbow, GPIO9 claw.
-        for i, source in enumerate((0, 2, 1, 3)):
+        # GPIO6 rotation, GPIO7 elbow, GPIO8 wrist, GPIO9 claw.
+        for i, source in enumerate((0, 1, 2, 3)):
             value = values[source]
             if value is None:
                 self._filtered[i] = self._angles[i]
