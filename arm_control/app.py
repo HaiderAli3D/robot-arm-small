@@ -8,10 +8,11 @@ import traceback
 
 from .control import Observation
 from .session import Session
+from .keyboard import create_servo_keys
 
 WINDOW = 'Robot arm - MediaPipe'
 MISSING = Observation(None, None, None, None)
-KEYBOARD_STEP = 15
+KEYBOARD_STEP = 7
 SERVO_KEYS = {
     ord('1'): (6,-KEYBOARD_STEP), ord('2'): (6,KEYBOARD_STEP),
     ord('4'): (7,-KEYBOARD_STEP), ord('5'): (7,KEYBOARD_STEP),
@@ -136,6 +137,7 @@ def run(config, args):
     observation = MISSING
     camera_status = 'Starting camera'
     tracker_error = None
+    servo_keys = None
     try:
         tracker = Tracker(config, args.models)
         camera = Camera(config.camera, config.width, config.height).start()
@@ -145,6 +147,7 @@ def run(config, args):
         if not args.headless:
             cv2.namedWindow(WINDOW, cv2.WINDOW_NORMAL)
             cv2.resizeWindow(WINDOW, config.width, config.height+330)
+            servo_keys = create_servo_keys(WINDOW)
         while True:
             was_switching = selector.switching
             changed = selector.poll()
@@ -219,7 +222,9 @@ def run(config, args):
                 break
             if key in (27, ord('q'), ord('Q')):
                 break
-            if key in SERVO_KEYS:
+            if servo_keys and key in (32, ord('c'), ord('C'), ord('m'), ord('M')):
+                servo_keys.cancel()
+            if key in SERVO_KEYS and servo_keys is None:
                 pin, delta = SERVO_KEYS[key]
                 session.nudge(pin,delta,time.monotonic())
             elif key in (ord('m'),ord('M')):
@@ -242,6 +247,17 @@ def run(config, args):
                     session.resume(time.monotonic())
             elif key in (ord('r'), ord('R')) and session.link:
                 session.connect()
+            if servo_keys:
+                # Accumulate 7-degree repeat increments by elapsed time, then
+                # send one target per channel instead of queuing old poses.
+                now = time.monotonic()
+                deltas = {}
+                for digit, count in servo_keys.poll(now).items():
+                    pin, delta = SERVO_KEYS[digit]
+                    deltas[pin] = deltas.get(pin, 0) + delta * count
+                for pin, delta in deltas.items():
+                    if delta:
+                        session.nudge(pin, delta, now)
             if args.frames and processed >= args.frames:
                 break
             if args.headless and captured is None:
@@ -253,6 +269,8 @@ def run(config, args):
                           'median_inference_ms': round(statistics.median(latencies),2) if latencies else None}))
         return 0
     finally:
+        if servo_keys:
+            servo_keys.close()
         # Freeze firmware before releasing camera/model resources, even on exceptions.
         try:
             session.close()

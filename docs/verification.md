@@ -140,3 +140,11 @@ Restarted on COM70/camera 1 and verified a responsive window, live Camo video, c
 Increased all numpad servo steps from 5 to 15 nominal degrees, tripling target displacement per keypress or keyboard repeat. The existing numpad pairs, manual mode, saved calibration origins, and gesture gains are unchanged. Physical servo maximum speed and Windows keyboard repeat timing are unchanged. The UI legend reads the same KEYBOARD_STEP constant as the key bindings. All 169 Python tests pass, including updated keyboard movement and tracking-isolation assertions. Firmware is unchanged.
 
 Restarted on COM70/camera 1. Verified live Camo video, connected status, the 15-degree numpad legend, and running keyboard mode during operator input.
+
+## Follow-up: seven-degree steps and doubled held-key repeat
+
+Changed servo key increments from 15 to 7 degrees. A Windows hook scoped to the app's own UI thread captures fresh presses and releases, discards native typematic duplicates, and preserves taps occurring between video frames. An elapsed-time scheduler repeats at twice the configured Windows rate, retaining the initial delay. This laptop reports speed 31 and delay 1: approximately 30 Hz native repeat and 500 ms delay, giving 60 Hz application repeat. Due increments combine into one target per channel per frame. Release, focus loss, and Space/C/M clear pending repeats; a new press can still resume normally. A stalled UI drops old repeat backlog without changing the run latch or adding joint limits. Firmware is unchanged.
+
+All 180 Python tests pass, covering tap preservation, doubled repeat cadence, OS repeat deduplication, release, focus, mode/pause retention, stalled-frame backlog, multi-key coalescing, and helper cleanup. A separate native OpenCV window, disconnected from serial, exercised the actual Windows hook with a 0.9-second numpad hold: it recorded one initial increment plus 24 repeats after the 0.5-second delay, with no increments after release. No synthetic servo movements were sent to the board.
+
+Restarted the full app on COM70/camera 1 and verified live Camo video, connected status, and the 7-degree numpad legend. It opened paused, retaining the board's commanded positions. Runtime logs and the own-window screenshot are in ignored artifacts/.

@@ -37,7 +37,7 @@ The large status banner shows your chosen mode: green **RUNNING** or amber **PAU
 
 ### Keyboard control
 
-Focus the preview window and use the number pad with **Num Lock on**. Each press changes the selected servo by **15 degrees**; holding a key uses your keyboard's normal repeat rate. This advances the target three times as far per repeat as the previous 5-degree step; the motor's physical maximum speed is unchanged.
+Focus the preview window and use the number pad with **Num Lock on**. Each press changes the selected servo by **7 degrees**. On Windows, holding a key repeats at **twice the configured keyboard repeat rate**, after the usual initial repeat delay. The app reads Windows' setting without changing it (currently 30 repeats/second on this laptop, giving 60 servo increments/second). Increments due between video frames are combined into one target update per channel. The motor's physical maximum speed is unchanged.
 
 | Servo | Decrease | Increase |
 |---|---|---|
@@ -46,11 +46,11 @@ Focus the preview window and use the number pad with **Num Lock on**. Each press
 | IO8 | Numpad 7 | Numpad 8 |
 | IO9 | Numpad 3 | Numpad 6 |
 
-Pressing a servo key selects **keyboard control**, starts movement, and sends the new angle immediately. It works without hand detection or calibration. Camera gestures cannot overwrite keyboard positions. **Space** pauses/resumes; another servo key also resumes and moves. **M** selects tracking again while retaining your run/pause choice; **C** selects tracking and starts its four-second calibration countdown. Reconnecting retains keyboard mode. Keyboard steps are direct servo degrees, independent of tracking gain and direction, with no joint travel clipping. The matching number-row digits also work because OpenCV receives the digit characters. The previous letter-based servo bindings are replaced.
+Pressing a servo key selects **keyboard control**, starts movement, and sends the new angle immediately. It works without hand detection or calibration. Camera gestures cannot overwrite keyboard positions. **Space** pauses/resumes; another servo key also resumes and moves. **M** selects tracking again while retaining your run/pause choice; **C** selects tracking and starts its four-second calibration countdown. After Space, M, C, or leaving the window, release and press a servo key again to start a new hold. Reconnecting retains keyboard mode. Keyboard steps are direct servo degrees, independent of tracking gain and direction, with no joint travel clipping. Matching number-row digits also work. The previous letter-based servo bindings are replaced. Other operating systems retain their normal key repeat through OpenCV.
 
 Calibration records the current servo commands and your left-hand rotation, right-elbow bend, right-wrist bend, and pinch as paired zero points. Any detected pose is accepted. Keeping the captured pose keeps all four servos at their current positions, including the claw. Later gesture changes move relative to those positions. Calibrating again replaces all four zeros with the latest positions; it does not send the arm back to centre. Keyboard steps and `Session.set_position` use the same saved zeros. Run/pause selection is preserved.
 
-GPIO7 elbow and GPIO8 wrist sensitivity are **4x**: a 5-degree change from your reference requests a 20-degree servo change before optional smoothing. GPIO6 retains 1x gain and the claw retains 2x. Keyboard steps are 15 servo degrees. Rotating the whole right forearm without bending the wrist does not change the wrist's relative angle.
+GPIO7 elbow and GPIO8 wrist sensitivity are **4x**: a 5-degree change from your reference requests a 20-degree servo change before optional smoothing. GPIO6 retains 1x gain and the claw retains 2x. Keyboard steps are 7 servo degrees. Rotating the whole right forearm without bending the wrist does not change the wrist's relative angle.
 
 If calibration waits after the countdown, the instruction beneath the banner identifies a hand or joint the camera cannot currently track. Keep your right arm and both hands visible and apart. Missing or invalid tracking cannot supply a reference angle; your actual pose is never rejected for being bent or pinched.
 

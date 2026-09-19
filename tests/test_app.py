@@ -3,7 +3,7 @@ import io
 import time
 import unittest
 from types import SimpleNamespace as NS
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 
@@ -12,11 +12,12 @@ from arm_control.camera import CapturedFrame
 from arm_control.config import Config
 from arm_control.control import Observation
 from arm_control.session import Session
+from arm_control.keyboard import KeyRepeater
 
 
 class AppCameraTests(unittest.TestCase):
     def exercise(self, keys, failed_first=False, pending_probes=False, frame_plan=None,
-                 camera_failures=(), tracker_failures=(), tracker_close_failures=()):
+                 camera_failures=(), tracker_failures=(), tracker_close_failures=(), servo_keys=None):
         cameras, trackers, panels, sessions, states, processed = [], [], [], [], [], []
         tracker_attempts, displays = [], []
         errors = io.StringIO()
@@ -90,6 +91,7 @@ class AppCameraTests(unittest.TestCase):
 
         args = NS(dry_run=True,port=None,models=None,headless=False,frames=0)
         with contextlib.ExitStack() as stack:
+            stack.enter_context(patch('arm_control.app.create_servo_keys', return_value=servo_keys))
             if planned_frames is not None:
                 stack.enter_context(patch('arm_control.app.time.monotonic', side_effect=lambda: clock[0]))
             with patch('arm_control.camera.Camera',FakeCamera), patch('arm_control.vision.Tracker',FakeTracker), \
@@ -196,7 +198,7 @@ class AppCameraTests(unittest.TestCase):
 
     def test_servo_keys_address_all_four_pins_without_a_camera(self):
         result = self.exercise([ord(k) for k in '1473q'],failed_first=True)
-        self.assertEqual(result.session.controller.angles,(75,75,75,75))
+        self.assertEqual(result.session.controller.angles,(83,83,83,83))
         self.assertEqual(result.session.control_mode,'keyboard')
         self.assertEqual([active for active,_ in result.states],[False,True,True,True,True])
 
@@ -207,10 +209,47 @@ class AppCameraTests(unittest.TestCase):
 
     def test_tracking_does_not_overwrite_keyboard_and_m_restores_tracking(self):
         result = self.exercise([ord('2'),-1,-1,ord('q')])
-        self.assertEqual(result.session.controller.angles,(105,90,90,90))
+        self.assertEqual(result.session.controller.angles,(97,90,90,90))
         result = self.exercise([ord('2'),ord('m'),-1,ord('q')])
         self.assertEqual(result.session.control_mode,'tracking')
         self.assertTrue(result.session.controller.calibrated)
+
+    def test_held_key_cannot_undo_pause_or_tracking_selection(self):
+        class HeldKey:
+            def __init__(self):
+                self.repeater = KeyRepeater(.5, 60)
+                self.repeater.event(0x62, 1, 0)
+                self.closed = False
+
+            def poll(self, now):
+                return self.repeater.poll(now, {0x62})
+
+            def cancel(self):
+                self.repeater.cancel()
+
+            def close(self):
+                self.closed = True
+
+        for command in (32, ord('m'), ord('c')):
+            with self.subTest(command=command):
+                held = HeldKey()
+                result = self.exercise([-1, command, -1, ord('q')], servo_keys=held,
+                                       frame_plan=[(0, True), (.6, True), (.7, True), (.8, True)])
+                self.assertTrue(held.closed)
+                if command == 32:
+                    self.assertFalse(result.session.controller.active)
+                    self.assertEqual(result.session.controller.angles, (97,90,90,90))
+                else:
+                    self.assertEqual(result.session.control_mode, 'tracking')
+                    self.assertTrue(result.states[-1][0])
+
+    def test_repeat_counts_combine_by_servo_with_seven_degree_steps(self):
+        keys = Mock()
+        keys.poll.side_effect = [{ord('1'): 2, ord('2'): 1, ord('5'): 3}]
+        result = self.exercise([-1, ord('q')], servo_keys=keys)
+        self.assertEqual(result.session.controller.angles, (83,111,90,90))
+        self.assertEqual(result.session.control_mode, 'keyboard')
+        keys.close.assert_called_once()
 
 
 if __name__ == '__main__':
