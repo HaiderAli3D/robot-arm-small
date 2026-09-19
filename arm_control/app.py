@@ -4,6 +4,7 @@ import json
 import statistics
 import textwrap
 import time
+import traceback
 
 from .control import Observation
 from .session import Session
@@ -133,6 +134,7 @@ def run(config, args):
     inference_ms = 0.0
     observation = MISSING
     camera_status = 'Starting camera'
+    tracker_error = None
     try:
         tracker = Tracker(config, args.models)
         camera = Camera(config.camera, config.width, config.height).start()
@@ -144,14 +146,28 @@ def run(config, args):
             cv2.resizeWindow(WINDOW, config.width, config.height+330)
         while True:
             was_switching = selector.switching
-            selector.poll()
-            if was_switching and not selector.switching:
-                tracker.close()
-                tracker = Tracker(config,args.models)
+            changed = selector.poll()
+            scan_finished = was_switching and not selector.switching
+            if changed:
                 camera = selector.camera
                 sequence = -1
                 last_capture = time.monotonic()
                 camera_failed = False
+                frame = pose = hands = None
+                matches = {}
+                observation = MISSING
+            if changed or (scan_finished and tracker is None):
+                # Detach before closing: a failed replacement must never leave
+                # a closed model owned by the loop or by final cleanup.
+                previous_tracker, tracker = tracker, None
+                try:
+                    if previous_tracker is not None:
+                        previous_tracker.close()
+                    tracker = Tracker(config,args.models)
+                    tracker_error = None
+                except Exception as error:
+                    tracker_error = f'Tracking unavailable - press V to retry: {error}'
+                    traceback.print_exc()
             captured = None if selector.switching else camera.latest(after=sequence, timeout=.03)
             now = time.monotonic()
             unavailable = captured is None and (camera.error or (now-last_capture > (10 if frame is None else 2)))
@@ -170,20 +186,29 @@ def run(config, args):
             elif captured is not None:
                 camera_failed = False
                 sequence, last_capture, frame = captured.sequence, captured.captured_at, captured.image
-                inference_start = time.monotonic()
-                observation, matches, pose, hands = tracker.process(frame, last_capture)
-                now = time.monotonic()
-                inference_ms = (now-inference_start)*1000
-                latencies.append(inference_ms)
-                processed += 1
                 camera_status = selector.status
-                valid_frames += int(all(value is not None for value in (
-                    observation.rotation, observation.elbow, observation.wrist, observation.pinch)))
-                session.frame(observation, captured_at=last_capture, now=now)
+                if tracker is None:
+                    pose = hands = None
+                    matches = {}
+                    observation = MISSING
+                    inference_ms = 0
+                    session.camera_missing(now)
+                else:
+                    inference_start = time.monotonic()
+                    observation, matches, pose, hands = tracker.process(frame, last_capture)
+                    now = time.monotonic()
+                    inference_ms = (now-inference_start)*1000
+                    latencies.append(inference_ms)
+                    processed += 1
+                    valid_frames += int(all(value is not None for value in (
+                        observation.rotation, observation.elbow, observation.wrist, observation.pinch)))
+                    session.frame(observation, captured_at=last_capture, now=now)
             elif not camera_failed and now-last_capture > .15:
                 camera_status = 'Waiting for camera frames'
                 observation = MISSING
                 session.camera_missing(now)
+            if tracker_error and not selector.switching and not unavailable:
+                camera_status = tracker_error
             if not args.headless:
                 cv2.imshow(WINDOW, _display(placeholder if frame is None else frame,
                                            pose, hands, matches, observation, session, inference_ms,
@@ -202,7 +227,9 @@ def run(config, args):
             elif key in (ord('v'),ord('V')) and not selector.switching:
                 session.prepare_camera_switch()
                 selector.request_next()
-                frame = pose = hands = None
+                # Keep the last preview visible while probes run, but never
+                # display or apply its stale landmarks as new observations.
+                pose = hands = None
                 matches = {}
                 observation = MISSING
                 inference_ms = 0
@@ -230,11 +257,15 @@ def run(config, args):
         try:
             session.close()
         finally:
-            if selector:
-                selector.close()
-            elif camera:
-                camera.close()
-            if tracker:
-                tracker.close()
-            if not args.headless:
-                cv2.destroyAllWindows()
+            try:
+                if selector:
+                    selector.close()
+                elif camera:
+                    camera.close()
+            finally:
+                try:
+                    if tracker:
+                        tracker.close()
+                finally:
+                    if not args.headless:
+                        cv2.destroyAllWindows()

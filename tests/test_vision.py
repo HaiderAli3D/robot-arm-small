@@ -1,8 +1,9 @@
 from types import SimpleNamespace as NS
 import math
 import unittest
+from unittest.mock import Mock
 
-from arm_control.vision import observation_from_results
+from arm_control.vision import Tracker, observation_from_results
 
 
 def point(x, y, z=0, visibility=1, presence=1):
@@ -26,6 +27,26 @@ def fixture():
 
 
 class VisionTests(unittest.TestCase):
+    def test_tracker_cleanup_is_idempotent(self):
+        tracker = Tracker.__new__(Tracker)
+        hands, pose = Mock(), Mock()
+        tracker.hands, tracker.pose = hands, pose
+        tracker.close()
+        tracker.close()
+        hands.close.assert_called_once_with()
+        pose.close.assert_called_once_with()
+
+    def test_tracker_cleanup_releases_pose_even_if_hands_close_fails(self):
+        tracker = Tracker.__new__(Tracker)
+        hands, pose = Mock(), Mock()
+        hands.close.side_effect = RuntimeError('native close failed')
+        tracker.hands, tracker.pose = hands, pose
+        with self.assertRaisesRegex(RuntimeError,'native close failed'):
+            tracker.close()
+        tracker.close()
+        hands.close.assert_called_once_with()
+        pose.close.assert_called_once_with()
+
     def test_assigns_anatomical_hands_regardless_of_result_order(self):
         pose, hands = fixture()
         obs, matches = observation_from_results(pose, hands, 1000, 500, .6)

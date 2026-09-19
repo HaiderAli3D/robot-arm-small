@@ -1,5 +1,5 @@
-# Camera 0 is normally the integrated webcam. Run --list-cameras to check.
-camera = 0
+# Camera 1 is Camo on this laptop. V switches cameras in the preview.
+camera = 1
 width = 960
 height = 720
 confidence = 0.6

@@ -90,6 +90,7 @@ class Tracker:
         self.mp = mp
         self.config = config
         self._last_ms = -1
+        self.hands = None
         self.pose = vision.PoseLandmarker.create_from_options(vision.PoseLandmarkerOptions(
             base_options=BaseOptions(model_asset_path=str(models / 'pose_landmarker_lite.task')),
             running_mode=vision.RunningMode.VIDEO, num_poses=1,
@@ -102,7 +103,7 @@ class Tracker:
                 min_hand_detection_confidence=config.hand_confidence,
                 min_hand_presence_confidence=config.hand_confidence, min_tracking_confidence=config.hand_confidence))
         except Exception:
-            self.pose.close()
+            self.close()
             raise
 
     def process(self, frame, captured_at):
@@ -118,5 +119,12 @@ class Tracker:
         return observation, matches, pose, hands
 
     def close(self):
-        self.hands.close()
-        self.pose.close()
+        # Clear ownership before entering native cleanup, including failures.
+        hands, self.hands = self.hands, None
+        pose, self.pose = self.pose, None
+        try:
+            if hands is not None:
+                hands.close()
+        finally:
+            if pose is not None:
+                pose.close()

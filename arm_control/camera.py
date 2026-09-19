@@ -20,27 +20,15 @@ class CapturedFrame:
 def _open_capture(index: int, width: int, height: int):
     import cv2
 
-    backends = (cv2.CAP_DSHOW, cv2.CAP_MSMF) if sys.platform == "win32" else (cv2.CAP_ANY,)
+    backends = (cv2.CAP_MSMF, cv2.CAP_DSHOW) if sys.platform == "win32" else (cv2.CAP_ANY,)
     for backend in backends:
         capture = cv2.VideoCapture(index, backend)
         if not capture.isOpened():
             capture.release()
             continue
-        try:
-            for property_id, value in ((cv2.CAP_PROP_FRAME_WIDTH, width),
-                                       (cv2.CAP_PROP_FRAME_HEIGHT, height),
-                                       (cv2.CAP_PROP_FPS, 30),
-                                       (cv2.CAP_PROP_BUFFERSIZE, 1)):
-                # Backend property support varies; unsupported settings normally
-                # return False, and some drivers instead raise cv2.error.
-                try:
-                    capture.set(property_id, value)
-                except Exception:
-                    pass
-            return capture
-        except BaseException:
-            capture.release()
-            raise
+        # Keep the driver's native format. Some virtual cameras accept property
+        # setters but then return black frames; processing size is set in software.
+        return capture
     raise OSError(f"Could not open camera {index}")
 
 
@@ -51,6 +39,8 @@ class Camera:
     opened capture object with ``read()`` and ``release()``. Only the worker
     accesses that object, including release. A stuck driver may leave a daemon
     alive until process exit; ``close()`` still returns within a bounded wait.
+    Width and height bound the processed image, preserving aspect ratio without
+    upscaling. They do not request a different hardware capture format.
     """
 
     def __init__(self, index: int, width: int, height: int, *,
@@ -93,6 +83,13 @@ class Camera:
                     break
                 if not success or image is None:
                     raise OSError("Camera capture failed or device disconnected")
+                image_height, image_width = image.shape[:2]
+                scale = min(self._width / image_width, self._height / image_height, 1.0)
+                if scale < 1.0:
+                    import cv2
+
+                    size = (max(1, round(image_width * scale)), max(1, round(image_height * scale)))
+                    image = cv2.resize(image, size, interpolation=cv2.INTER_AREA)
                 sequence += 1
                 with self._condition:
                     if self._stop.is_set():

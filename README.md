@@ -25,7 +25,7 @@ Setup creates `.venv`, installs the locked Windows dependencies, and downloads t
 
 In the preview:
 
-Press **V** in the preview window to cycle to the next available camera. The app checks camera indices 0-3, skips unavailable devices, and keeps the current camera if no alternative is found. Camera switching preserves your run/pause choice and reference pose. Camera selection applies to the current run; change `camera` in `config.toml` to set the startup default.
+Press **V** in the preview window to cycle to the next available camera. The supplied configuration starts on **camera 1 (Camo)**. The app checks camera indices 0-3, skips unavailable devices, and keeps the current camera if no alternative is found. Camera switching preserves your run/pause choice and reference pose. Camera selection applies to the current run; change `camera` in `config.toml` to set the startup default.
 
 1. Keep one person in view, including the right shoulder, elbow, wrist, and both hands. Keep the hands apart so their arm associations are clear.
 2. Choose any comfortable pose with your right arm and both hands visible. Your elbow and wrist can be bent, and your fingers can be open or pinched.
@@ -115,7 +115,7 @@ Quit and pause are software holds, not electrical emergency stops. `off` stops p
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test.ps1
 ```
 
-If the camera cannot open, press **V** in the window, check Windows **Privacy & security > Camera**, allow desktop apps, or close competing camera apps. The shortcut remains available even when the current camera has no feed. If your only camera failed to open, fix its permissions or competing app, then restart this app to retry it. Camo/virtual cameras may be different indices from the integrated webcam. Models run on the CPU; reduce resolution if tracking feels delayed. The app retains only the latest captured frame to avoid a growing camera queue. Normal MediaPipe native-library warnings may appear on stderr.
+If the camera cannot open, press **V** in the window, check Windows **Privacy & security > Camera**, allow desktop apps, or close competing camera apps. The shortcut remains available even when the current camera has no feed. If your only camera failed to open, fix its permissions or competing app, then restart this app to retry it. Camo/virtual cameras may be different indices from the integrated webcam. Cameras open in their native format, using Windows Media Foundation first and DirectShow if it cannot open. The app downsizes frames in software to fit `width` and `height`, preserving aspect ratio; it does not force Camo to accept an unsupported capture size. Models run on the CPU; reduce those processing dimensions if tracking feels delayed. The app retains only the latest captured frame to avoid a growing camera queue. Normal MediaPipe native-library warnings may appear on stderr.
 
 `requirements.txt` lists direct dependencies; `requirements-lock.txt` records the complete tested Python 3.12 Windows environment. Only one OpenCV package is installed. The reference pose is kept in memory across camera changes and reconnects; restarting the app clears it. Editing config requires restarting the app.
 
