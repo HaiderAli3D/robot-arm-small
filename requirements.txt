@@ -1,0 +1,5 @@
+# Tested together on Windows x64 / Python 3.12. Do not install a second cv2 package.
+mediapipe==0.10.18
+numpy==1.26.4
+opencv-contrib-python==4.10.0.84
+pyserial==3.5

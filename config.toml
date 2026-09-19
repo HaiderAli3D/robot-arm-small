@@ -1,0 +1,42 @@
+# Camera 0 is normally the integrated webcam. Run --list-cameras to check.
+camera = 0
+width = 960
+height = 720
+confidence = 0.6
+send_hz = 30
+
+# All servos boot at 90 degrees; GPIO9 must physically be open there.
+claw_open = 90
+claw_closed = 0
+pinch_closed_ratio = 0.2
+smoothing_tau = 0.12
+deadband = 1.0
+max_speed = 90
+loss_timeout = 0.5
+calibration_seconds = 1
+
+# Set limits for your mechanism BEFORE live use. These are nominal pulse angles.
+# direction = -1 reverses a control; gain scales its movement.
+[joints.gpio6]
+minimum = 0
+maximum = 180
+direction = 1
+gain = 1
+
+[joints.gpio7]
+minimum = 0
+maximum = 180
+direction = 1
+gain = 1
+
+[joints.gpio8]
+minimum = 0
+maximum = 180
+direction = 1
+gain = 1
+
+[joints.gpio9]
+minimum = 0
+maximum = 180
+direction = 1
+gain = 1
