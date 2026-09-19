@@ -5,8 +5,8 @@ Track your arms and hands locally with MediaPipe, then send four servo positions
 | Servo signal | Control | Neutral |
 |---|---|---|
 | GPIO6 | Left hand turning like a clock hand in the camera preview | 90 degrees |
-| GPIO7 | Right elbow bending | 90 degrees, arm straight |
-| GPIO8 | Right hand bending relative to the forearm in the camera view | 90 degrees, wrist straight |
+| GPIO7 | Right hand bending relative to the forearm in the camera view | 90 degrees, wrist straight |
+| GPIO8 | Right elbow bending | 90 degrees, arm straight |
 | GPIO9 | Right thumb/index pinch | 90 degrees, claw open |
 
 The robot's horns/linkages must already be aligned so **90 degrees on all four channels means straight arm and open claw**. Firmware commands this pose at boot. There are no joint-position sensors: every displayed angle is a commanded pulse position, not measured mechanical feedback. The tracking firmware retains the working sample's PWM and pin assignments. Your newer `RELATIVE-CW-v4` sample remains unchanged under `ESP32C5_FourServos`; the app uses the separate `ESP32C5_Tracking` sketch.
@@ -75,6 +75,8 @@ Use positional servos such as the existing sketch's MG90S. Continuous-rotation s
 The retained 50Hz, 14-bit PWM maps nominal 0..180 degrees to 1000..2000 microseconds. **Verify mechanical endpoints and direction before loading the arm.** Begin around 90 with small manual moves, then set `minimum`, `maximum`, `direction`, and `gain` in `config.toml`. For example, limit a joint to 60..120 for initial testing. The configured interval must contain 90.
 
 GPIO9 defaults to open=90, closed=0. Set `claw_closed` to the tested closed position (including 180 if that matches your linkage) and keep it inside GPIO9's limits. Pinch closure is proportional to thumb/index separation divided by palm width: `pinch_closed_ratio = 0.2` sets fully closed and `pinch_open_ratio = 1.0` sets fully open. These thresholds are independent of calibration and can be adjusted for your hand. Calibrating with pinched fingers is valid; once you press Space the claw follows your pinch. Do not reverse both the claw endpoint and its direction unless you intend that combined effect.
+
+The supplied configuration sets `[joints.gpio9] gain = 2` for twice the claw response. With the current endpoints, a pinch ratio of 0.8 commands 45 degrees and 0.6 commands fully closed at 0 degrees; 1.0 or higher opens to 90. GPIO7 now controls wrist bend and GPIO8 controls elbow bend, matching the revised wiring assignment.
 
 The servo protocol accepts finite nominal angles in 0..180. There is no firmware or app speed cap; firmware applies each target on its next 50Hz output tick. Optional `smoothing_tau` and `deadband` filter tracking jitter. Narrower configured joint ranges apply to tracking; manual commands use the full protocol range. Physical travel may differ from nominal degrees. The obsolete `max_speed` and `loss_timeout` settings have been removed.
 

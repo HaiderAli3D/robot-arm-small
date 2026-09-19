@@ -224,8 +224,8 @@ class SessionTests(unittest.TestCase):
         angles = session.controller.angles
         session.step(Observation(None,30,None,1), 1.2)
         self.assertEqual(session.controller.angles[0], angles[0])
-        self.assertEqual(session.controller.angles[2], angles[2])
-        self.assertGreater(session.controller.angles[1], angles[1])
+        self.assertEqual(session.controller.angles[1], angles[1])
+        self.assertGreater(session.controller.angles[2], angles[2])
         self.assertTrue(session.controller.active)
 
     def test_large_frame_gap_does_not_pause_or_discard_reference(self):

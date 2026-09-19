@@ -87,7 +87,7 @@ def _display(frame, pose, hands, matches, observation, session, inference_ms, fr
         y += 29
     angles = '   '.join(f'GPIO{pin} {value:5.1f}' for pin,value in zip(range(6,10),controller.angles))
     inputs = '  '.join(f'{label}: {value:.1f}' if value is not None else f'{label}: missing'
-                       for label,value in zip(('L rotation','R elbow bend','R wrist bend','Pinch'),
+                       for label,value in zip(('IO6 rotation','IO8 elbow','IO7 wrist','IO9 pinch'),
                                               (observation.rotation,observation.elbow,observation.wrist,observation.pinch)))
     lines = [f'Commanded degrees: {angles}', session.connection_status,
              inputs,

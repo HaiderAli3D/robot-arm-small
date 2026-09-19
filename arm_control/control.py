@@ -19,7 +19,7 @@ def _relative(value: float, reference: float) -> float:
 
 
 class Controller:
-    """Map GPIO6/7/8 around nominal 90 and GPIO9 around claw_open.
+    """Map rotation/wrist/elbow to GPIO6/7/8 and pinch to GPIO9.
 
     Claw target is open + direction * gain * closure * (closed - open),
     clamped to configured joint bounds. Closure is 0 at pinch_open_ratio
@@ -140,7 +140,10 @@ class Controller:
             return self.angles
         self.status = "Running - tracking" if complete else "Running - waiting for missing tracking; last angles held"
         alpha = 1.0 if self.config.smoothing_tau == 0 else -math.expm1(-dt / self.config.smoothing_tau)
-        for i, value in enumerate(values):
+        # Observations are rotation/elbow/wrist/pinch; servo pins are
+        # GPIO6 rotation, GPIO7 wrist, GPIO8 elbow, GPIO9 claw.
+        for i, source in enumerate((0, 2, 1, 3)):
+            value = values[source]
             if value is None:
                 self._filtered[i] = self._angles[i]
                 continue
@@ -151,7 +154,8 @@ class Controller:
                 closure = max(0.0, min(1.0, closure))
                 target = self.config.claw_open + joint.direction * joint.gain * closure * (self.config.claw_closed - self.config.claw_open)
             else:
-                relative = value - self._reference[i] if i == 1 else _relative(value, self._reference[i])
+                relative = (value - self._reference[source] if source == 1
+                            else _relative(value, self._reference[source]))
                 target = 90.0 + joint.direction * joint.gain * relative
             target = max(joint.minimum, min(joint.maximum, target))
             if abs(target - self._angles[i]) <= self.config.deadband:

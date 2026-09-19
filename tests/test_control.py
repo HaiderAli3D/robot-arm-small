@@ -1,7 +1,9 @@
 import math
 import unittest
+from dataclasses import replace
+from pathlib import Path
 
-from arm_control.config import Config, JointConfig
+from arm_control.config import Config, JointConfig, load_config
 from arm_control.control import Controller, Observation
 
 
@@ -39,7 +41,7 @@ class ControllerTests(unittest.TestCase):
     def test_neutral_relative_mapping_and_proportional_pinch(self):
         c = calibrated(observation=Observation(30, 5, -5, 1))
         actual = advance(c, Observation(60, 50, -35, 0.6))
-        for got, expected in zip(actual, (120, 135, 60, 45)):
+        for got, expected in zip(actual, (120, 60, 135, 45)):
             self.assertAlmostEqual(got, expected)
         self.assertEqual(advance(c, Observation(30, 5, -5, 1), start=3.1), (90, 90, 90, 90))
 
@@ -47,7 +49,20 @@ class ControllerTests(unittest.TestCase):
         joints = (JointConfig(70, 110, -1, 2), JointConfig(0, 110, 1, 2),
                   JointConfig(60, 130, -1, 1), JointConfig(0, 120, -1, 0.5))
         c = calibrated(Config(joints=joints, smoothing_tau=0, deadband=0))
-        self.assertEqual(advance(c, Observation(30, 30, -50, 0.2)), (70, 110, 130, 120))
+        self.assertEqual(advance(c, Observation(30, 30, -50, 0.2)), (70, 0, 60, 120))
+
+    def test_elbow_only_drives_gpio8_and_wrist_only_drives_gpio7(self):
+        c = calibrated(observation=Observation(0,30,10,1))
+        self.assertEqual(c.update(Observation(0,60,10,1),1.2),(90,90,120,90))
+        self.assertEqual(c.update(Observation(0,30,-20,1),1.3),(90,60,90,90))
+
+    def test_project_claw_gain_doubles_response_and_reaches_both_endpoints(self):
+        config = load_config(Path(__file__).resolve().parents[1] / 'config.toml')
+        c = calibrated(replace(config,smoothing_tau=0,deadband=0))
+        self.assertAlmostEqual(c.update(Observation(0,0,0,.8),1.2)[3],45)
+        self.assertAlmostEqual(c.update(Observation(0,0,0,.6),1.3)[3],0)
+        self.assertEqual(c.update(Observation(0,0,0,.2),1.4)[3],0)
+        self.assertEqual(c.update(Observation(0,0,0,1),1.5)[3],90)
 
     def test_rotation_wrap_and_repeated_pose_does_not_accumulate(self):
         c = calibrated(observation=Observation(179, 0, 0, 1))
@@ -120,8 +135,8 @@ class ControllerTests(unittest.TestCase):
         c = calibrated()
         c.update(Observation(30, None, 30, None), 1.2)
         self.assertGreater(c.angles[0], 90)
-        self.assertEqual(c.angles[1], 90)
-        self.assertGreater(c.angles[2], 90)
+        self.assertGreater(c.angles[1], 90)
+        self.assertEqual(c.angles[2], 90)
         self.assertEqual(c.angles[3], 90)
         self.assertTrue(c.active)
 
@@ -189,9 +204,9 @@ class ControllerTests(unittest.TestCase):
         self.assertTrue(c.calibrated)
         self.assertFalse(c.active)
         self.assertEqual(c.angles, (85, 95, 90, 90))
-        c.update(Observation(-5, 5, 0, 1), 1.3)
+        c.update(Observation(-5, 0, 5, 1), 1.3)
         self.assertTrue(c.resume(1.3))
-        self.assertEqual(c.update(Observation(-5, 5, 0, 1), 1.4), (85, 95, 90, 90))
+        self.assertEqual(c.update(Observation(-5, 0, 5, 1), 1.4), (85, 95, 90, 90))
 
     def test_sync_preserves_run_state_and_rejects_unencodable_angles(self):
         c = calibrated()

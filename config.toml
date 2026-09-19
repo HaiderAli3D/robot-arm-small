@@ -24,12 +24,14 @@ direction = 1
 gain = 1
 
 [joints.gpio7]
+# Right wrist bend.
 minimum = 0
 maximum = 180
 direction = 1
 gain = 1
 
 [joints.gpio8]
+# Right elbow bend.
 minimum = 0
 maximum = 180
 direction = 1
@@ -39,4 +41,5 @@ gain = 1
 minimum = 0
 maximum = 180
 direction = 1
-gain = 1
+# Double claw response: fully closed at pinch ratio 0.6 with current endpoints.
+gain = 2
