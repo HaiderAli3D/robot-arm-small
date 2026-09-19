@@ -156,3 +156,13 @@ Reduced Windows keyboard repeat from 2x to 1.5x the configured rate, retaining 7
 All 180 Python tests pass, including the revised immediate-start cadence, native repeat deduplication, release handling, pause/mode changes, and dropped stale backlog. An isolated native OpenCV input test with no serial connection observed 40 increments during a 0.9-second hold, with its first repeat 31 ms after the initial step and no repeats after release. The initial smoke attempt received no input because its test window lacked focus; the focused rerun passed.
 
 Restarted on COM70/camera 1 and verified live Camo video, connected status, and the retained 7-degree legend. Firmware is unchanged.
+
+## Follow-up: release servo holding during calibration countdown
+
+Pressing C now sends the existing firmware `off` command, disabling all four PWM outputs during the four-second countdown. Periodic poses, Space/resume, and reconnect cannot re-enable them during that countdown. At its end, `resume` plus the saved pose restores outputs while preserving the host's running/paused selection. A servo key cancels calibration and restores outputs for immediate manual control. Repeated C restarts the countdown. The UI explicitly says `servos released` while waiting. Countdown timing advances without camera frames and follows the main loop; blocking camera/model operations can delay restoration. No firmware upload was needed.
+
+This uses the last commanded angles: the servos have no position feedback, so manually repositioning the released arm does not change its stored angles or zero references. Existing firmware off/hold semantics preserve disabled outputs until a new pose enables them.
+
+All 190 Python tests pass. New coverage verifies release ACK handling and errors, no poses during the countdown, restoration without camera/hands, running and paused cases, Space, repeated C, keyboard cancellation, reconnect, and USB failures. Independent review found a stale countdown message when the camera was unavailable; missing-frame updates now advance calibration status in that case.
+
+Restarted the full app on COM70/camera 1 and exercised C while paused. The live window showed `PAUSED - servos released` during the countdown, then `CALIBRATING - arm held` waiting for hand detection. COM70 stayed connected through off/resume/pose acknowledgements, and the displayed commanded positions were unchanged. Live Camo video remained responsive. Physical holding torque was not independently measured. Screenshots and logs remain in ignored artifacts/.

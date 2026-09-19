@@ -172,6 +172,8 @@ class SerialLink:
                 raise LinkError(f"Expected {expected!r}, received {reply!r}")
             if command == "resume":
                 self._resumed = True
+            elif command == "off":
+                self._resumed = False
         except Exception as exc:
             self._disconnect()
             if isinstance(exc, LinkError):
@@ -185,6 +187,10 @@ class SerialLink:
 
     def hold(self) -> tuple[float, ...]:
         return self._command("hold", angles=True)
+
+    def off(self) -> None:
+        """Release all servo outputs until an explicit resume and pose."""
+        self._command("off")
 
     def send_pose(self, angles: Iterable[float]) -> None:
         try:

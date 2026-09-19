@@ -70,7 +70,10 @@ def _display(frame, pose, hands, matches, observation, session, inference_ms, fr
     panel = cv2.copyMakeBorder(display, 0, 330, 0, 0, cv2.BORDER_CONSTANT, value=(25,28,28))
     top = display.shape[0]
     controller = session.controller
-    if controller.active:
+    if session.servos_released:
+        state = ('RUNNING' if controller.active else 'PAUSED') + ' - servos released'
+        color = (100,220,100) if controller.active else (60,190,245)
+    elif controller.active:
         if session.link is None:
             state = 'RUNNING - preview only'
         elif not session.connected:
@@ -210,9 +213,11 @@ def run(config, args):
             elif not camera_failed and now-last_capture > .15:
                 camera_status = 'Waiting for camera frames'
                 observation = MISSING
+            if captured is None:
                 session.camera_missing(now)
             if tracker_error and not selector.switching and not unavailable:
                 camera_status = tracker_error
+            session.tick(time.monotonic())
             if not args.headless:
                 cv2.imshow(WINDOW, _display(placeholder if frame is None else frame,
                                            pose, hands, matches, observation, session, inference_ms,

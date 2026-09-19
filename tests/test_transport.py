@@ -117,6 +117,7 @@ class TransportTests(unittest.TestCase):
             b"hello\n": b"ROBOT_ARM 2 70 80 90 100\r\n",
             b"resume\n": b"OK resume\n",
             b"hold\n": b"OK hold 71 81 91 101\n",
+            b"off\n": b"OK off\n",
             b"pose 10 20 30 40\n": b"OK pose\n",
         })
         opened = []
@@ -156,6 +157,53 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(serial.writes[-1], b"hold\n")
         self.assertTrue(serial.closed)
         link.close()
+
+    def test_off_then_resume_allows_poses_again(self):
+        link, serial, _, _ = self.make_link()
+        link.connect()
+        link.resume()
+        link.send_pose((10, 20, 30, 40))
+        link.off()
+        self.assertFalse(serial.closed)
+        link.resume()
+        link.send_pose((10, 20, 30, 40))
+        self.assertEqual(serial.writes[-4:],
+                         [b"pose 10 20 30 40\n", b"off\n", b"resume\n", b"pose 10 20 30 40\n"])
+
+    def test_off_requires_another_explicit_resume_before_pose(self):
+        link, serial, _, _ = self.make_link()
+        link.connect()
+        link.resume()
+        link.off()
+        with self.assertRaisesRegex(LinkError, "resume explicitly"):
+            link.send_pose((10, 20, 30, 40))
+        self.assertEqual(serial.writes[-1], b"off\n")
+        self.assertNotIn(b"pose 10 20 30 40\n", serial.writes)
+
+    def test_off_requires_exact_ack_and_disconnects_on_failure(self):
+        for reply in (b"OK hold\n", b"OK off extra\n", b"ERR unavailable\n",
+                      b"OK of", b"", b"OK off\nOK off\n"):
+            with self.subTest(reply=reply):
+                link, serial, clock, _ = self.make_link()
+                link.connect()
+                link.resume()
+                serial.responses[b"off\n"] = reply
+                start = clock.now
+                with self.assertRaises(LinkError):
+                    link.off()
+                self.assertTrue(serial.closed)
+                self.assertLessEqual(clock.now - start, 0.5)
+                with self.assertRaises(LinkError):
+                    link.resume()
+
+    def test_off_disconnect_is_wrapped_and_port_is_closed(self):
+        link, serial, _, _ = self.make_link()
+        link.connect()
+        link.resume()
+        serial.write_error = OSError("unplugged")
+        with self.assertRaisesRegex(LinkError, "unplugged"):
+            link.off()
+        self.assertTrue(serial.closed)
 
     def test_boot_identification_without_hello_response_times_out(self):
         link, serial, clock, _ = self.make_link({})

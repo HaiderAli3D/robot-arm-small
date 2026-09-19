@@ -29,7 +29,7 @@ Press **V** in the preview window to cycle to the next available camera. The sup
 
 1. Keep one person in view, including the right shoulder, elbow, wrist, and both hands. Keep the hands apart so their arm associations are clear.
 2. Choose any comfortable pose with your right arm and both hands visible. Your elbow and wrist can be bent, and your fingers can be open or pinched.
-3. Optionally press **C** to choose a reference pose after a four-second countdown. There is no hold-steady test or additional capture delay. C preserves your run/pause choice and holds the last angles until capture. On capture all four displayed positions become 0; the physical targets stay where they are.
+3. Optionally press **C** to choose a reference pose after a four-second countdown. Servo pulses switch off during the countdown, releasing their hold while you get into position. The window shows **servos released**. At four seconds, pulses return to the last commanded angles and calibration captures the next complete detected pose. C preserves your run/pause choice. On capture all four displayed positions become 0. These servos provide no position feedback: moving the released arm by hand does not update its stored angles or calibration zeros. A servo key ends the countdown and immediately returns to keyboard control.
 4. Press **Space** to start. If no reference exists, the first complete tracked pose supplies it automatically. Turn the left hand like a clock hand; bend the right elbow and wrist; pinch/open the right thumb and index finger.
 5. Press **Space** to pause and hold, or **Q/Escape** to quit. The window's close button also stops control.
 
