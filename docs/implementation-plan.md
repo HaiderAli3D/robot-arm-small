@@ -1,5 +1,7 @@
 # MediaPipe robot arm implementation plan
 
+> Historical design notes. Several behaviors below were changed during development, including servo limits, timeout handling, calibration, and pin mappings. For the current application, use the [setup guide](setup.md) and [technical reference](reference.md).
+
 Approved design: local Python 3.12 camera tracking -> USB UART at 115200 -> ESP32-C5 LEDC on GPIO6/7/8/9. Right arm controls elbow/wrist/claw; left hand's clockwise image-plane rotation controls GPIO6. All servos boot at nominal 90 degrees, with the claw open.
 
 ## Work and ownership
