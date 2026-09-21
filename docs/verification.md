@@ -204,3 +204,9 @@ Changed supplied `smoothing_tau` from 0.12 to 2.0 seconds for all four tracked c
 All 196 Python tests pass. A direct check using the actual supplied configuration verified the two-second response on rotation, elbow, wrist, and pinch: raw outputs (115.2848,115.2848,115.2848,61.5546) from centred outputs toward targets (130,130,130,45). Firmware is unchanged.
 
 Restarted on COM70/camera 1 and verified live Camo video and connected status with the new smoothing configuration.
+
+## Keyboard-only version
+
+Added a standalone Tkinter controller, minimal pyserial-only setup, and a separate double-click launcher. It shares the existing serial/run-state logic and key mapping, but never opens a camera or loads inference libraries. Current-position zeroing runs after four seconds without changing servo commands or the selected run state.
+
+All 205 Python tests pass, including keyboard-only zeroing, immediate steps, USB fault/reconnect, and callback-error cleanup. A real Tk window preview also passed the four-second zeroing and pause checks with imports of MediaPipe, OpenCV, and NumPy blocked. Its installed native key callback was exercised directly; Windows denied foreground activation from the background test shell, so this does not constitute a physical-key input test. Injected tick and button-command errors closed the window and propagated as errors. The double-click launcher was exercised from outside the repository and the live app reported `Connected: COM70` with a responsive keyboard window. No new firmware or physical travel changes were made.

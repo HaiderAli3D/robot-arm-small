@@ -9,17 +9,10 @@ import traceback
 
 from .control import Observation
 from .session import Session
-from .keyboard import create_servo_keys
+from .keyboard import KEYBOARD_STEP, SERVO_KEYS, create_servo_keys
 
 WINDOW = 'Robot arm - MediaPipe'
 MISSING = Observation(None, None, None, None)
-KEYBOARD_STEP = 7
-SERVO_KEYS = {
-    ord('1'): (6,-KEYBOARD_STEP), ord('2'): (6,KEYBOARD_STEP),
-    ord('4'): (7,-KEYBOARD_STEP), ord('5'): (7,KEYBOARD_STEP),
-    ord('7'): (8,-KEYBOARD_STEP), ord('8'): (8,KEYBOARD_STEP),
-    ord('3'): (9,-KEYBOARD_STEP), ord('6'): (9,KEYBOARD_STEP),
-}
 HAND_EDGES = ((0,1),(1,2),(2,3),(3,4),(0,5),(5,6),(6,7),(7,8),
               (5,9),(9,10),(10,11),(11,12),(9,13),(13,14),(14,15),(15,16),
               (13,17),(0,17),(17,18),(18,19),(19,20))

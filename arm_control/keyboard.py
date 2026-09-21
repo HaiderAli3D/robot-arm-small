@@ -4,6 +4,14 @@ from collections import Counter
 import sys
 import time
 
+KEYBOARD_STEP = 7
+SERVO_KEYS = {
+    ord('1'): (6, -KEYBOARD_STEP), ord('2'): (6, KEYBOARD_STEP),
+    ord('4'): (7, -KEYBOARD_STEP), ord('5'): (7, KEYBOARD_STEP),
+    ord('7'): (8, -KEYBOARD_STEP), ord('8'): (8, KEYBOARD_STEP),
+    ord('3'): (9, -KEYBOARD_STEP), ord('6'): (9, KEYBOARD_STEP),
+}
+
 VIRTUAL_DIGITS = {vk: ord(str(digit)) for digit in range(1, 9)
                   for vk in (ord(str(digit)), 0x60 + digit)}
 

@@ -66,6 +66,10 @@ class Controller:
         self._angles = self._checked_angles(angles)
         self._filtered = list(self._angles)
 
+    def zero_current_positions(self) -> None:
+        """Save commanded positions as display zeros without moving outputs."""
+        self._zero_angles = tuple(self._angles)
+
     def reset(self, angles=(90, 90, 90, 90)) -> None:
         """Forget calibration and synchronize with actual held device outputs."""
         self._angles = self._checked_angles(angles)

@@ -6,6 +6,10 @@ A webcam watches your movements, MediaPipe tracks them on your laptop, and an ES
 
 **[Start here: setup guide →](docs/setup.md)** · [Controls](#take-control) · [Settings and protocol](docs/reference.md)
 
+## Prefer just the keyboard?
+
+Use the separate **[keyboard-only controller](docs/keyboard-only.md)** for the same number-key joint controls, pause/resume, and powered zeroing without a camera or tracking dependencies. If this arm is already set up, close the camera app and double-click **[Start Robot Arm Keyboard.cmd](Start%20Robot%20Arm%20Keyboard.cmd)** (default port: COM70).
+
 ## What it does
 
 | Your movement | Robot control | Servo pin |
