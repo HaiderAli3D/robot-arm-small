@@ -1,6 +1,10 @@
-# Set up your robot arm
+# Camera tracking and shared hardware setup
 
-Let's get the camera working first, then connect the arm. You can try all the tracking and keyboard controls in preview mode before plugging in an ESP32.
+**Looking for the new keyboard console? Start with the [keyboard-only guide](keyboard-only.md).** It covers the showcase UI, fullscreen mode, and a lightweight installation with no webcam or tracking models.
+
+This page covers the optional camera-tracking app, plus the wiring and firmware used by **both** controllers. Keyboard-console users can jump straight to [wiring](#4-wire-the-servos) and [firmware upload](#5-upload-the-tracking-firmware), then return to the [keyboard guide's live connection steps](keyboard-only.md).
+
+For camera control, let's get the preview working first, then connect the arm. You can try tracking before plugging in an ESP32.
 
 This guide covers the tested setup: **64-bit Windows, Python 3.12, an ESP32-C5, and four positional servos**. The laptop processes the camera video locally; USB carries the servo commands to the board. Internet access is needed for the initial software and model downloads, but not for normal tracking.
 

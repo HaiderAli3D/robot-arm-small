@@ -1,8 +1,10 @@
 # Technical reference
 
-[Back to README](../README.md) | [Setup guide](setup.md)
+[Back to README](../README.md) | [Keyboard console guide](keyboard-only.md) | [Camera and hardware setup](setup.md)
 
 These are the current controller details. Run the commands below from the repository root after setup. The [verification notes](verification.md) and [original implementation plan](implementation-plan.md) contain historical configurations that have since changed.
+
+The keyboard-only console uses the same USB protocol and firmware. Its controls and schematic are covered in the [keyboard guide](keyboard-only.md); the gesture mapping and `config.toml` settings below apply to the camera-tracking app. Changing tracking gains or smoothing does not change keyboard movement.
 
 ## Coordinates and calibration
 

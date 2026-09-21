@@ -1,95 +1,130 @@
-# Control the arm with just your keyboard
+# Your keyboard. Four servos. One control desk.
 
-This version gives the robot arm its own control window, with no camera or hand tracking. Use the number keys to position each joint, pause and resume, and save your current pose as zero. It works with the same ESP32 firmware and wiring as the tracking version.
+Drive the arm from a dedicated desktop console: tap a key, watch the joint dial turn, and see the command appear on the history graph. No camera, hand tracking, or pose calibration is needed.
 
-[Back to the README](../README.md)
+[Back to the README](../README.md) | [Shared wiring and firmware guide](setup.md#4-wire-the-servos)
 
-## Already using the robot arm?
+![Keyboard controller with an articulated arm diagram, colored joint dials, and command history](images/keyboard-console.jpg)
 
-Double-click **[Start Robot Arm Keyboard.cmd](../Start%20Robot%20Arm%20Keyboard.cmd)**. It connects to **COM70** and starts paused. Close the original controller first so the USB port is available.
+*The console shows commanded positions. Its arm illustration is a visual guide, not a measured pose or a mechanical simulation.*
 
-Click the keyboard controller window, then use the keys below. The original camera controller and its launcher remain available separately.
+## Already set up? Double-click and go
 
-The showcase console includes a dimensional arm schematic, color-matched joint dials, and eight seconds of command history. The illustration responds to your commands; it is not a measured pose or a mechanical simulation. Setting zero keeps the illustration and history anchored to the same raw commands. Smaller windows simplify the layout, with scrolling available when needed.
+Close the original controller, then double-click **[Start Robot Arm Keyboard.cmd](../Start%20Robot%20Arm%20Keyboard.cmd)**. It connects to **COM70** and opens paused. Click the console to give it keyboard focus, then use the joint keys below.
 
-The schematic uses a short IO6–IO7 base link and an extended IO8–IO9 tool link. IO7's visual direction is reversed to match the motor mounting and moves at half scale: a 7° command changes the illustration by 3.5°. Raw 90 remains upright, and the full sweep remains available with larger commands. This changes the illustration, not the motor's key mapping or travel limits.
-
-Press **F11** for fullscreen presentation mode and press it again to return to the window. The joint key buttons also work with the mouse. **Tab** moves between buttons and **Enter** activates the focused button.
-
-If your board has a different port, edit `ROBOT_ARM_PORT=COM70` in the new launcher. You can also supply a port from PowerShell:
+To use a different port, edit `ROBOT_ARM_PORT=COM70` in that file, or launch it from PowerShell with a port argument:
 
 ```powershell
 & '.\Start Robot Arm Keyboard.cmd' COM9
 ```
 
-## First-time setup
+The camera controller remains available through its original launcher. Run one controller at a time so they do not compete for the USB port.
 
-Install Python 3.12 for Windows with its Python launcher and Tcl/Tk support (included in the standard installer), then download this repository. From the repository folder, run:
+## First time? Start with a practice run
+
+Install Git and **Python 3.12 for Windows**, including the Python launcher and Tcl/Tk support from the standard installer. Open PowerShell and run:
 
 ```powershell
+git clone https://github.com/HaiderAli3D/robot-arm-small.git
+cd robot-arm-small
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-keyboard.ps1
-```
-
-This creates or reuses `.venv` and installs **pyserial 3.5**. The window uses Python's built-in Tkinter. This setup does not install MediaPipe, OpenCV, or tracking models. Existing tracking dependencies in a reused environment can stay installed; the keyboard controller does not use them.
-
-Try the interface without connecting to hardware:
-
-```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-keyboard.ps1
 ```
 
-This is a dry run: the displayed angles change, but no serial connection opens and no motor commands are sent.
+Already downloaded the project? Open PowerShell in its folder and run the last two commands.
 
-For a new arm, follow the [wiring and firmware instructions](setup.md#4-wire-the-servos). Use the `ESP32C5_Tracking` sketch; its name is shared with the original app, but it also supports the keyboard controller. No firmware update is needed when switching between the two apps if the current protocol 2 firmware is already installed.
+Setup creates or reuses `.venv`, installs **pyserial 3.5**, and checks Python's Tkinter window support. It does not download MediaPipe, OpenCV, or tracking models. Those packages can remain installed if you also use the camera version; the keyboard console does not load them.
 
-Find the board's port, then connect using that port:
+**Launching without a port opens preview mode.** The controls, illustration, and history work, but the app opens no serial connection and sends no commands to hardware.
+
+### A one-minute console tour
+
+Try this in preview mode first:
+
+1. Press **F11** to fill the screen.
+2. Tap **2**, **5**, and **8** to move the first three joints. Watch their matching colors across the diagram, dials, and graph.
+3. Tap **3** and **6** to explore the claw. Hold a joint key briefly to see repeated movement.
+4. Press **Space** to pause. The state indicator makes the change clear.
+5. Press **C**, wait four seconds, and watch the position readouts become zero while the pictured arm stays put.
+6. Press **F11** again to return to a window.
+
+A joint key automatically resumes control, even when paused. This also applies to the on-screen joint buttons.
+
+## Connect the real arm
+
+Use the existing [servo wiring instructions](setup.md#4-wire-the-servos) and [firmware upload steps](setup.md#5-upload-the-tracking-firmware). The shared sketch is named `ESP32C5_Tracking`; it supports both controller versions. If your board already has the current protocol 2 firmware, switching apps does not require another upload.
+
+Connect the board's USB UART port, close any other controller or Arduino Serial Monitor, and list the available ports:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-keyboard.ps1 -ListPorts
+```
+
+Then start live control with your board's port:
+
+```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-keyboard.ps1 -Port COM9
 ```
 
-Replace `COM9` with your board's port. After setup, use the double-click launcher for future sessions.
+Replace `COM9` with the port reported for your board. **A port enables real motor commands.** The console starts paused; a joint key resumes it and moves that joint. Once this works, update the double-click launcher's port for future sessions.
 
-## Controls
+## Know your control desk
 
-Keep the controller window focused while using the keyboard. Turn **Num Lock on** for the numpad; the number row works too.
+| Area | What it tells you |
+|---|---|
+| State and connection | Whether control is running or paused, and whether you are in preview or connected to the board. |
+| Arm diagram | An articulated view of the commanded pose, with a short base link and a longer tool link. |
+| Colored joint dials | A quick visual reference for each servo channel. |
+| Position readouts | Each joint's command relative to your saved zero. |
+| Command history | The last eight seconds on one shared angle scale, measured from the boot center. |
 
-| Joint | Decrease | Increase |
+Zeroing changes the position readouts' reference. It does not jump the diagram or history, which remain anchored to the same underlying commands.
+
+The IO7 illustration follows the mounting direction at half scale around raw 90 degrees: a 7-degree command moves the drawing by 3.5 degrees in the reversed visual direction. This is a drawing adjustment; the servo still receives the full command. The display cannot confirm the arm's physical position because these servos provide no position feedback.
+
+The layout adapts to smaller windows, with scrolling when needed. Use **F11** for fullscreen, **Tab** to move between buttons, and **Enter** to activate the focused button. Clicking a joint button makes one step; hold a physical key for repeated steps.
+
+## Keep these keys handy
+
+Use the numpad with **Num Lock on**, or the number row. Keep the console window focused.
+
+| Servo | Decrease | Increase |
 |---|---|---|
-| GPIO6 | Numpad **1** | Numpad **2** |
-| GPIO7 | Numpad **4** | Numpad **5** |
-| GPIO8 | Numpad **7** | Numpad **8** |
-| GPIO9 / claw | Numpad **3** | Numpad **6** |
+| IO6 | **1** | **2** |
+| IO7 | **4** | **5** |
+| IO8 | **7** | **8** |
+| IO9 / claw | **3** | **6** |
 
-Each press changes the target by **7 degrees**. Holding a key repeats at **1.5 times the Windows keyboard repeat rate**, beginning after one repeat interval instead of the usual initial typing delay. Keyboard movement is immediate; there is no tracking smoothing.
+Each press changes the target by **7 degrees**. Holding a key repeats at **1.5 times the Windows keyboard repeat rate**, starting after one repeat interval instead of the usual typing delay. Keyboard commands apply immediately, without the tracking version's smoothing. Tracking gains in `config.toml` do not change these keyboard steps.
 
 | Key | Action |
 |---|---|
-| **Space** | Resume or pause; the window shows the current state. |
-| **C** | Start a four-second countdown, then set the current commanded pose as zero. |
-| **R** | Reconnect to the ESP32. |
-| **F11** | Toggle fullscreen for a showcase or demonstration. |
-| **Q** or **Esc** | Quit. |
+| **Space** | Resume or pause. |
+| **C** | Save the current commanded positions as zero after four seconds. |
+| **R** | Reconnect, keeping your running/paused choice. |
+| **F11** | Toggle fullscreen. |
+| **Q** or **Esc** | Quit. Esc also quits while fullscreen. |
 
-A joint key automatically resumes control, including when paused. During zeroing, a joint key cancels the countdown and moves that joint.
+A joint key or joint-button click resumes control. During the zeroing countdown, either also cancels zeroing and moves that joint.
 
-## Set a comfortable starting pose
+## Make the current pose your zero
 
-1. Position the arm with the joint keys.
-2. Press **C** and wait four seconds.
-3. The current commanded position of every joint becomes **0 degrees** in the controller.
+Position the arm with the joint keys, press **C**, and wait four seconds. The servos stay powered and hold their current commanded positions throughout. When the countdown finishes, those positions become **0 degrees** in the readouts. Nothing snaps back, and your running/paused choice is preserved.
 
-The servos stay powered and keep their position throughout. Saving zero does not move the arm, and it preserves whether control was running or paused. No camera, body pose, or hand detection is involved.
+The reference lasts for this app session. Restarting clears it. Use the keys to reposition the arm: moving it by hand does not tell the software where the shafts went.
 
-Zero is a reference for the current app session. It is not a physical position measurement: these servos do not report their shaft positions, so reposition with the keys rather than by moving the arm by hand. Restarting the app clears the saved reference.
+Pausing holds position; it does not cut servo power. The app allows negative angles and commands beyond plus or minus 90 degrees without adding joint limits or automatic pauses. Actual servo travel and the firmware's electrical range still apply. The board centers the servos on boot. Use the external servo supply and common ground described in the wiring guide.
 
-## Useful things to know
+## If something gets in the way
 
-- The controller starts paused. Pausing holds the arm's current commanded position; it does not cut servo power.
-- Angles can go below zero and beyond plus or minus 90 degrees. The app does not add joint limits or automatic pauses. Physical servo travel and the firmware's electrical output range still apply.
-- The ESP32 centers the servos when it boots. Power the servos from the external supply with a common ground, as described in the [wiring guide](setup.md#4-wire-the-servos).
-- Run one controller at a time. If the USB port is busy, close the other app or Arduino Serial Monitor and press **R** to reconnect.
-- If the launcher reports missing Python or dependencies, rerun `scripts\setup-keyboard.ps1`. If Tkinter is missing, modify your Python installation to include Tcl/Tk support.
+| What you see | What to try |
+|---|---|
+| The picture moves but the arm does not | Check whether you launched preview mode. Close it and run with `-Port` and your board's port. |
+| Port busy or connection failed | Close the other controller and Arduino Serial Monitor. Check the USB cable and port, then press **R**. |
+| Number keys do nothing | Click the console, enable Num Lock, or try the number row. |
+| The launcher uses the wrong port | Edit `ROBOT_ARM_PORT=COM70`, or pass the correct port as its first argument. |
+| Missing Python or serial dependency | Run `scripts\setup-keyboard.ps1` again from the project folder. |
+| Tkinter is unavailable | Modify the Python installation to include Tcl/Tk support, then rerun setup. |
+| The diagram differs from the real arm | It displays commands rather than measured feedback. Check assembly, boot center, and the IO7 visual scaling described above. |
 
-For terminal use, the underlying command is `python -m arm_control.keyboard_only` from the project's virtual environment. Add `--dry-run`, `--port COM9`, or `--list-ports` as needed. See the [technical reference](reference.md) for the shared serial protocol and firmware.
+For direct terminal use, run `python -m arm_control.keyboard_only` inside the project's virtual environment. Options include `--dry-run`, `--port COM9`, and `--list-ports`. The [technical reference](reference.md) covers the shared firmware and serial protocol.
