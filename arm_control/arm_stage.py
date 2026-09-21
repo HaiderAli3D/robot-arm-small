@@ -12,6 +12,7 @@ import tkinter as tk
 BASE_LINK_LENGTH = 50.0
 FOREARM_LINK_LENGTH = 147.0
 TOOL_LINK_LENGTH = 165.0
+ELBOW_VISUAL_GAIN = 0.5
 SCENE_WIDTH = 840.0
 SCENE_HEIGHT = 650.0
 
@@ -19,8 +20,8 @@ SCENE_HEIGHT = 650.0
 def arm_geometry(angles):
     """Return schematic joints without touching hardware or controller state.
 
-    IO7 has a linear, reversed visual response: raw 0 points right, 90 up,
-    and 180 left. Wrapping is only for numerical stability of drawing angles.
+    IO7 has a reversed, half-scale visual response around raw 90 (upright).
+    Wrapping is only for numerical stability of drawing angles, after scaling.
     IO8 retains its existing relative wrist response around the IO7 link.
     """
     yaw, elbow, wrist, claw = (float(value) for value in angles)
@@ -35,7 +36,8 @@ def arm_geometry(angles):
     base_angle = math.atan2(-148.0, -32.0) + turn*.25
     joint = (shoulder[0] + BASE_LINK_LENGTH*math.cos(base_angle),
              shoulder[1] + BASE_LINK_LENGTH*math.sin(base_angle))
-    arm_angle = -math.radians(elbow % 360.0)
+    visual_elbow = 90.0 + (elbow - 90.0) * ELBOW_VISUAL_GAIN
+    arm_angle = -math.radians(visual_elbow % 360.0)
     end = (joint[0] + FOREARM_LINK_LENGTH*math.cos(arm_angle),
            joint[1] + FOREARM_LINK_LENGTH*math.sin(arm_angle))
     hand_angle = arm_angle + math.radians(32.0 + flex*69.0)

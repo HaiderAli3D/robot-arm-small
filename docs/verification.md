@@ -222,3 +222,7 @@ All 207 Python tests pass. New regression checks cover single activation per Ent
 Shortened the IO6–IO7 link to 50 drawing units (previously about 151) and extended IO8–IO9 to 165 (previously 59). IO7 now draws a linear, reversed 180-degree sweep: raw 0 points right, 90 up, and 180 left. IO8 retains its previous relative response. The user confirmed this direction change is visual only; motor commands, key mapping, and firmware are unchanged.
 
 All 210 Python tests pass, including exact link lengths, the full reversed semicircle, and finite geometry for extreme commands. The new drawing was visually inspected in the controller preview. The renderer also passed 81 extreme/default pose combinations without introducing motor limits.
+
+## IO7 visual response at half scale
+
+Reduced IO7's visual gain to 0.5 about raw 90, keeping the upright reference and reversed direction. Each 7-degree motor command now changes the schematic by 3.5 degrees. Scaling happens before angle wrapping to avoid a discontinuity at raw 360. Motor commands, numerical readouts, other joints' relative responses, and link lengths are unchanged. All 211 Python tests pass, including half-scale response, full-sweep availability, and the raw-360 continuity check.
