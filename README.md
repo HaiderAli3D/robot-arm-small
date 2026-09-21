@@ -45,6 +45,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run.ps1 -Port COM9
 
 Replace `COM9` with your ESP32's actual USB UART port. The app starts paused.
 
+**For future launches:** after setup, double-click [`Start Robot Arm.cmd`](Start%20Robot%20Arm.cmd). It uses COM70 and your saved camera settings; see the [setup guide](docs/setup.md#start-with-a-double-click-next-time) to change the port.
+
 ## Take control
 
 Click the camera window so it receives your key presses.

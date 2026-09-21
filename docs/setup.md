@@ -120,6 +120,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run.ps1 -Port COM9
 
 You can also add `-Camera 0` if needed. The connection status should say **Connected** and name the port. A fresh app session starts **PAUSED**; this holds the commanded position with the servos powered.
 
+### Start with a double-click next time
+
+After setup and firmware upload, double-click [`Start Robot Arm.cmd`](../Start%20Robot%20Arm.cmd) in the project folder. It starts live control using **COM70** and the camera selected in `config.toml`. The app still starts paused; click its camera window to use the controls.
+
+If your board uses another port, right-click the launcher, choose **Edit** (or open it in Notepad), and change `set "ROBOT_ARM_PORT=COM70"` to your port. You can also pass a port from PowerShell: `& '.\Start Robot Arm.cmd' COM9`. The launcher works regardless of the current folder and keeps its console open if startup fails so you can read the error.
+
 ### Position the arm, then make that position zero
 
 1. Click the preview window and turn **Num Lock on**.
