@@ -226,3 +226,7 @@ All 210 Python tests pass, including exact link lengths, the full reversed semic
 ## IO7 visual response at half scale
 
 Reduced IO7's visual gain to 0.5 about raw 90, keeping the upright reference and reversed direction. Each 7-degree motor command now changes the schematic by 3.5 degrees. Scaling happens before angle wrapping to avoid a discontinuity at raw 360. Motor commands, numerical readouts, other joints' relative responses, and link lengths are unchanged. All 211 Python tests pass, including half-scale response, full-sweep availability, and the raw-360 continuity check.
+
+## Built-in controls guide
+
+Added a Controls button and F1 shortcut to show a matching in-app reference for every joint key and command. The guide preserves the run/pause state and leaves keyboard control available. All 213 Python tests pass, including unchanged session state and F1 repeat suppression. Runtime layout checks verified the guide fits 1200x860, 980x680, and 820x560 windows. Desktop preview checks confirmed F1 closes it and the Controls button reopens it.

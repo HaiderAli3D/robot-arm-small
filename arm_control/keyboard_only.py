@@ -102,7 +102,7 @@ class KeyboardWindow:
         if self.keys is None and event.char and ord(event.char) in SERVO_KEYS:
             pin, delta = SERVO_KEYS[ord(event.char)]
             self.session.nudge(pin, delta, time.monotonic())
-        elif key in ('space', 'c', 'r', 'q', 'escape', 'f11'):
+        elif key in ('space', 'c', 'r', 'q', 'escape', 'f11', 'f1'):
             if key not in self.pressed_commands:
                 self.pressed_commands.add(key)
                 self.command(key)
@@ -113,7 +113,7 @@ class KeyboardWindow:
     def key_up(self, event):
         key = event.keysym.lower()
         self.pressed_commands.discard(key)
-        if key in ('space', 'c', 'r', 'q', 'escape', 'f11', 'return'):
+        if key in ('space', 'c', 'r', 'q', 'escape', 'f11', 'f1', 'return'):
             return 'break'
 
     def activate_button(self, button):
@@ -123,7 +123,7 @@ class KeyboardWindow:
         return 'break'
 
     def command(self, key):
-        if key not in ('space', 'c', 'r', 'q', 'escape', 'f11'):
+        if key not in ('space', 'c', 'r', 'q', 'escape', 'f11', 'f1'):
             return
         if self.keys:
             self.keys.cancel()
@@ -131,7 +131,9 @@ class KeyboardWindow:
         if key in ('q', 'escape'):
             self.close()
             return
-        if key == 'f11':
+        if key == 'f1':
+            self.view.toggle_controls()
+        elif key == 'f11':
             # Tk recreates the Windows wrapper HWND when toggling fullscreen.
             # Rebind native key ownership to that new window before continuing.
             if self.keys:

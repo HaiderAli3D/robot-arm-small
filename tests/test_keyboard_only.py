@@ -36,6 +36,28 @@ class Device:
 
 
 class KeyboardOnlyTests(unittest.TestCase):
+    def test_controls_guide_preserves_running_state_and_servo_commands(self):
+        window = KeyboardWindow.__new__(KeyboardWindow)
+        window.keys = Mock()
+        window.view = Mock()
+        window.render = Mock()
+        window.session = Mock()
+        window.command('f1')
+        window.view.toggle_controls.assert_called_once()
+        self.assertEqual(window.session.mock_calls, [])
+
+    def test_holding_f1_toggles_guide_only_once_until_released(self):
+        window = KeyboardWindow.__new__(KeyboardWindow)
+        window.keys = Mock()
+        window.pressed_commands = set()
+        window.command = Mock()
+        for _ in range(5):
+            window.key_down(Mock(keysym='F1'))
+        window.command.assert_called_once_with('f1')
+        window.key_up(Mock(keysym='F1'))
+        window.key_down(Mock(keysym='F1'))
+        self.assertEqual(window.command.call_count, 2)
+
     def test_fullscreen_refreshes_native_key_ownership(self):
         window = KeyboardWindow.__new__(KeyboardWindow)
         window.root = Mock()

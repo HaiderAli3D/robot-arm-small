@@ -86,6 +86,8 @@ The layout adapts to smaller windows, with scrolling when needed. Use **F11** fo
 
 ## Keep these keys handy
 
+Click **Controls** at the top of the console, or press **F1**, to see the joint keys and shortcuts inside the app. Press F1 again or click **Close** to dismiss the guide. Opening it preserves your running/paused choice, and the joint keys still work.
+
 Use the numpad with **Num Lock on**, or the number row. Keep the console window focused.
 
 | Servo | Decrease | Increase |
@@ -100,6 +102,7 @@ Each press changes the target by **7 degrees**. Holding a key repeats at **1.5 t
 | Key | Action |
 |---|---|
 | **Space** | Resume or pause. |
+| **F1** | Open or close the controls guide. |
 | **C** | Save the current commanded positions as zero after four seconds. |
 | **R** | Reconnect, keeping your running/paused choice. |
 | **F11** | Toggle fullscreen. |

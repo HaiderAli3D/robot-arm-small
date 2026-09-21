@@ -120,6 +120,7 @@ class ConsoleView:
         self.state_badge.pack(side='right')
         self.link_badge = text(header, 'Preview', size=10, color=MUTED)
         self.link_badge.pack(side='right', padx=20)
+        self.button(header, 'Controls   F1', lambda: command('f1')).pack(side='right', padx=(0, 8))
 
         viewport_frame = tk.Frame(root, bg=BG)
         viewport_frame.grid(row=1, column=0, sticky='nsew', padx=28)
@@ -249,6 +250,62 @@ class ConsoleView:
 
         viewport.bind('<Configure>', fit_body)
         body.bind('<Configure>', fit_body)
+
+        self.controls_guide = tk.Frame(root, bg=PANEL, highlightbackground=ACCENTS[0], highlightthickness=1)
+        guide = self.controls_guide
+        guide.columnconfigure(0, weight=1)
+        heading = tk.Frame(guide, bg=PANEL)
+        heading.grid(row=0, column=0, sticky='ew', padx=24, pady=(18, 10))
+        text(heading, 'Your controls', size=20, background=PANEL).pack(side='left')
+        self.button(heading, 'Close   F1', lambda: command('f1')).pack(side='right')
+        text(guide, 'Use the numpad with Num Lock on, or the number row.', size=11,
+             color=MUTED, background=PANEL).grid(row=1, column=0, sticky='w', padx=24, pady=(0, 14))
+        tables = tk.Frame(guide, bg=PANEL)
+        tables.grid(row=2, column=0, sticky='ew', padx=24)
+        tables.columnconfigure(0, weight=1)
+        tables.columnconfigure(2, weight=1)
+        joints = tk.Frame(tables, bg=PANEL)
+        joints.grid(row=0, column=0, sticky='nw')
+        for col, title in enumerate(('Joint', 'Decrease', 'Increase')):
+            text(joints, title, size=10, color=MUTED, background=PANEL).grid(
+                row=0, column=col, sticky='w', padx=(0, 15), pady=(0, 8))
+        for row, (name, pair, color) in enumerate(zip(
+                ('IO6  Rotation', 'IO7  Elbow', 'IO8  Wrist', 'IO9  Claw'),
+                (('1', '2'), ('4', '5'), ('7', '8'), ('3', '6')), ACCENTS), start=1):
+            text(joints, name, size=11, color=color, background=PANEL).grid(
+                row=row, column=0, sticky='w', padx=(0, 18), pady=8)
+            for col, digit in enumerate(pair, start=1):
+                text(joints, digit, size=12, background='#253650', width=4, pady=3).grid(
+                    row=row, column=col, sticky='w', padx=(0, 15), pady=5)
+        tk.Frame(tables, width=1, bg=LINE).grid(row=0, column=1, sticky='ns', padx=20)
+        shortcuts = tk.Frame(tables, bg=PANEL)
+        shortcuts.grid(row=0, column=2, sticky='nw')
+        for row, (key, action) in enumerate((
+                ('Space', 'Resume / pause'), ('C', 'Set zero after 4 seconds'),
+                ('R', 'Reconnect USB'), ('F11', 'Fullscreen / windowed'),
+                ('F1', 'Open / close this guide'), ('Q / Esc', 'Quit the app'),
+                ('Tab / Enter', 'Select / activate a button'))):
+            text(shortcuts, key, size=10, color=ACCENTS[0], background=PANEL).grid(
+                row=row, column=0, sticky='w', padx=(0, 18), pady=4)
+            text(shortcuts, action, size=10, background=PANEL).grid(row=row, column=1, sticky='w', pady=4)
+        tk.Frame(guide, height=1, bg=LINE).grid(row=3, column=0, sticky='ew', padx=24, pady=(16, 12))
+        notes = (
+            '7° per press. Hold a key to repeat; click a joint button for one step.',
+            'Joint keys resume movement, even when paused, and cancel a pending zero.',
+            'C keeps the servos powered and saves their current position without moving them.',
+            'Opening this guide keeps your current running / paused state.',
+        )
+        for row, note in enumerate(notes, start=4):
+            text(guide, note, size=10, color=MUTED, background=PANEL, anchor='w').grid(
+                row=row, column=0, sticky='w', padx=24, pady=(0, 6))
+        tk.Frame(guide, height=10, bg=PANEL).grid(row=8, column=0)
+
+    def toggle_controls(self):
+        if self.controls_guide.winfo_manager() == 'place':
+            self.controls_guide.place_forget()
+        else:
+            self.controls_guide.place(relx=.5, rely=.5, anchor='center')
+            self.controls_guide.lift()
 
     def button(self, parent, label, callback, *, primary=False, compact=False):
         background = ACCENTS[0] if primary else '#253650'

@@ -51,6 +51,7 @@ Each press changes the command by **7 nominal degrees**. Hold a key to repeat at
 | Key | Action |
 |---|---|
 | **Space** | Resume / pause |
+| **F1** | Open / close the built-in controls guide |
 | **C** | Save the current position as zero after four seconds |
 | **F11** | Fullscreen / windowed |
 | **R** | Reconnect USB |
