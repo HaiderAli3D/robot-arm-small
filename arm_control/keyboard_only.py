@@ -57,9 +57,10 @@ class KeyboardWindow:
         self.session = session
         self.root = tk.Tk()
         self.root.title(WINDOW)
-        self.root.geometry('820x490')
-        self.root.minsize(740, 460)
-        self.root.configure(bg='#141c27')
+        width = min(1200, self.root.winfo_screenwidth() - 80)
+        height = min(860, self.root.winfo_screenheight() - 100)
+        self.root.geometry(f'{width}x{height}')
+        self.root.minsize(min(980, width), min(680, height))
         self.closed = False
         self.keys = None
         self.pressed_commands = set()
@@ -67,56 +68,13 @@ class KeyboardWindow:
         self.callback_error = None
         self.root.report_callback_exception = self.callback_failed
 
-        def label(parent, text='', size=12, color='#d9e2ee', **kwargs):
-            return tk.Label(parent, text=text, font=('Segoe UI', size),
-                            bg='#141c27', fg=color, **kwargs)
-
-        label(self.root, 'Robot Arm', size=24).pack(anchor='w', padx=26, pady=(20, 0))
-        label(self.root, 'Keyboard control', color='#9eafc4').pack(anchor='w', padx=28)
-        self.banner = label(self.root, size=22, anchor='w', padx=20, pady=9)
-        self.banner.pack(fill='x', padx=26, pady=(16, 12))
-
-        cards = tk.Frame(self.root, bg='#141c27')
-        cards.pack(fill='x', padx=20)
-        self.positions = []
-        for column, (pin, name, pair) in enumerate(((6, 'Rotation', '1 / 2'),
-                                                   (7, 'Elbow', '4 / 5'),
-                                                   (8, 'Wrist', '7 / 8'),
-                                                   (9, 'Claw', '3 / 6'))):
-            cards.columnconfigure(column, weight=1)
-            card = tk.Frame(cards, bg='#202e40', padx=12, pady=12)
-            card.grid(row=0, column=column, padx=6, sticky='nsew')
-            for text, size, color in ((f'IO{pin}  {name}', 12, '#d9e2ee'),
-                                      ('+0°', 25, '#ffffff'),
-                                      (f'{pair}   − / +', 12, '#a9bdd4')):
-                item = tk.Label(card, text=text, font=('Segoe UI', size), bg='#202e40', fg=color)
-                item.pack(pady=3)
-                if size == 25:
-                    self.positions.append(item)
-
-        self.status = label(self.root, anchor='w')
-        self.status.pack(fill='x', padx=28, pady=(15, 3))
-        self.connection = label(self.root, size=11, color='#9eafc4', anchor='w', wraplength=750)
-        self.connection.pack(fill='x', padx=28)
-        buttons = tk.Frame(self.root, bg='#141c27')
-        buttons.pack(fill='x', padx=26, pady=14)
-        self.toggle_button = None
-        for key, text in (('space', 'Resume · Space'), ('c', 'Set zero · C'),
-                          ('r', 'Reconnect · R'), ('q', 'Quit · Q')):
-            button = tk.Button(buttons, text=text, command=lambda k=key: self.command(k),
-                               font=('Segoe UI', 11), bg='#30445e', fg='white',
-                               activebackground='#415c7e', activeforeground='white',
-                               relief='flat', padx=12, pady=7, takefocus=False)
-            button.pack(side='left', padx=(0, 8))
-            # Handle shortcuts before Tk's Button class can also activate Space.
+        from .console_view import ConsoleView
+        self.view = ConsoleView(self.root, self.command, self.nudge)
+        for button in self.view.buttons:
+            # Global shortcuts win over Tk Button's own Space binding.
             button.bind('<KeyPress>', self.key_down)
             button.bind('<KeyRelease>', self.key_up)
-            if key == 'space':
-                self.toggle_button = button
-        label(self.root, f'Num Lock ON  •  {KEYBOARD_STEP}° per step  •  Hold to repeat  •  Number-row keys also work',
-              size=10, color='#9eafc4').pack(anchor='w', padx=28)
-        label(self.root, 'Servo keys resume movement. C saves the current commands as zero after 4 seconds.',
-              size=10, color='#9eafc4').pack(anchor='w', padx=28, pady=(4, 12))
+            button.bind('<Return>', lambda event, target=button: self.activate_button(target))
 
         self.root.protocol('WM_DELETE_WINDOW', self.close)
         self.root.bind('<KeyPress>', self.key_down)
@@ -144,16 +102,28 @@ class KeyboardWindow:
         if self.keys is None and event.char and ord(event.char) in SERVO_KEYS:
             pin, delta = SERVO_KEYS[ord(event.char)]
             self.session.nudge(pin, delta, time.monotonic())
-        elif key not in self.pressed_commands:
-            self.pressed_commands.add(key)
-            self.command(key)
+        elif key in ('space', 'c', 'r', 'q', 'escape', 'f11'):
+            if key not in self.pressed_commands:
+                self.pressed_commands.add(key)
+                self.command(key)
+        else:
+            return None
         return 'break'
 
     def key_up(self, event):
-        self.pressed_commands.discard(event.keysym.lower())
+        key = event.keysym.lower()
+        self.pressed_commands.discard(key)
+        if key in ('space', 'c', 'r', 'q', 'escape', 'f11', 'return'):
+            return 'break'
+
+    def activate_button(self, button):
+        if 'return' not in self.pressed_commands:
+            self.pressed_commands.add('return')
+            button.invoke()
+        return 'break'
 
     def command(self, key):
-        if key not in ('space', 'c', 'r', 'q', 'escape'):
+        if key not in ('space', 'c', 'r', 'q', 'escape', 'f11'):
             return
         if self.keys:
             self.keys.cancel()
@@ -161,7 +131,18 @@ class KeyboardWindow:
         if key in ('q', 'escape'):
             self.close()
             return
-        if key == 'space':
+        if key == 'f11':
+            # Tk recreates the Windows wrapper HWND when toggling fullscreen.
+            # Rebind native key ownership to that new window before continuing.
+            if self.keys:
+                self.keys.close()
+                self.keys = None
+            fullscreen = not self.root.attributes('-fullscreen')
+            self.root.attributes('-fullscreen', fullscreen)
+            self.root.update_idletasks()
+            self.keys = create_servo_keys(self.root.title())
+            self.view.fullscreen_button.configure(text='Windowed   F11' if fullscreen else 'Fullscreen   F11')
+        elif key == 'space':
             if self.session.controller.active:
                 self.session.pause()
             else:
@@ -172,19 +153,14 @@ class KeyboardWindow:
             self.session.connect()
         self.render()
 
+    def nudge(self, pin, delta):
+        if self.keys:
+            self.keys.cancel()
+        self.session.nudge(pin, delta, time.monotonic())
+        self.render()
+
     def render(self):
-        controller = self.session.controller
-        state = 'RUNNING' if controller.active else 'PAUSED'
-        if self.session.link is None:
-            state += '  ·  Preview only'
-        elif not self.session.connected:
-            state += '  ·  USB disconnected'
-        self.banner.configure(text=state, bg='#226346' if controller.active else '#765424')
-        self.toggle_button.configure(text='Pause · Space' if controller.active else 'Resume · Space')
-        self.status.configure(text=controller.status)
-        self.connection.configure(text=self.session.connection_status)
-        for widget, value in zip(self.positions, controller.positions):
-            widget.configure(text=f'{value:+.0f}°')
+        self.view.update(self.session, time.monotonic())
 
     def tick(self):
         if self.closed:

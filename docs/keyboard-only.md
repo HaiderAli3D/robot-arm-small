@@ -10,6 +10,10 @@ Double-click **[Start Robot Arm Keyboard.cmd](../Start%20Robot%20Arm%20Keyboard.
 
 Click the keyboard controller window, then use the keys below. The original camera controller and its launcher remain available separately.
 
+The showcase console includes a dimensional arm schematic, color-matched joint dials, and eight seconds of command history. The illustration responds to your commands; it is not a measured pose or a mechanical simulation. Setting zero keeps the illustration and history anchored to the same raw commands. Smaller windows simplify the layout, with scrolling available when needed.
+
+Press **F11** for fullscreen presentation mode and press it again to return to the window. The joint key buttons also work with the mouse. **Tab** moves between buttons and **Enter** activates the focused button.
+
 If your board has a different port, edit `ROBOT_ARM_PORT=COM70` in the new launcher. You can also supply a port from PowerShell:
 
 ```powershell
@@ -63,6 +67,7 @@ Each press changes the target by **7 degrees**. Holding a key repeats at **1.5 t
 | **Space** | Resume or pause; the window shows the current state. |
 | **C** | Start a four-second countdown, then set the current commanded pose as zero. |
 | **R** | Reconnect to the ESP32. |
+| **F11** | Toggle fullscreen for a showcase or demonstration. |
 | **Q** or **Esc** | Quit. |
 
 A joint key automatically resumes control, including when paused. During zeroing, a joint key cancels the countdown and moves that joint.

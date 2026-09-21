@@ -36,6 +36,35 @@ class Device:
 
 
 class KeyboardOnlyTests(unittest.TestCase):
+    def test_fullscreen_refreshes_native_key_ownership(self):
+        window = KeyboardWindow.__new__(KeyboardWindow)
+        window.root = Mock()
+        window.root.attributes.return_value = False
+        window.root.title.return_value = 'Robot arm - Keyboard'
+        window.keys = old_keys = Mock()
+        window.view = Mock()
+        window.render = Mock()
+        replacement = Mock()
+        with patch('arm_control.keyboard_only.create_servo_keys', return_value=replacement) as create:
+            window.command('f11')
+        old_keys.cancel.assert_called_once()
+        old_keys.close.assert_called_once()
+        window.root.attributes.assert_any_call('-fullscreen', True)
+        window.root.update_idletasks.assert_called_once()
+        create.assert_called_once_with('Robot arm - Keyboard')
+        self.assertIs(window.keys, replacement)
+
+    def test_enter_activates_focused_button_once_until_released(self):
+        window = KeyboardWindow.__new__(KeyboardWindow)
+        window.pressed_commands = set()
+        button = Mock()
+        for _ in range(10):
+            self.assertEqual(window.activate_button(button), 'break')
+        button.invoke.assert_called_once()
+        window.key_up(Mock(keysym='Return'))
+        window.activate_button(button)
+        self.assertEqual(button.invoke.call_count, 2)
+
     def test_tk_callback_failure_closes_resources_and_propagates_from_run(self):
         window = KeyboardWindow.__new__(KeyboardWindow)
         window.root = Mock()
