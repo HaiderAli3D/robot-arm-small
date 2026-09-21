@@ -1,12 +1,49 @@
 """A responsive, dependency-free schematic of the arm's commanded pose.
 
-This is an illustration, not forward kinematics or position feedback.  Bounded
-display transforms deliberately keep even extreme commands inside the viewport.
-They never alter the commands sent to the arm.
+This is an illustration, not measured forward kinematics or position feedback.
+Display transforms remain finite for extreme commands and never alter the
+commands sent to the arm.
 """
 
 import math
 import tkinter as tk
+
+
+BASE_LINK_LENGTH = 50.0
+FOREARM_LINK_LENGTH = 147.0
+TOOL_LINK_LENGTH = 165.0
+SCENE_WIDTH = 840.0
+SCENE_HEIGHT = 650.0
+
+
+def arm_geometry(angles):
+    """Return schematic joints without touching hardware or controller state.
+
+    IO7 has a linear, reversed visual response: raw 0 points right, 90 up,
+    and 180 left. Wrapping is only for numerical stability of drawing angles.
+    IO8 retains its existing relative wrist response around the IO7 link.
+    """
+    yaw, elbow, wrist, claw = (float(value) for value in angles)
+    yaw, elbow, wrist, claw = (
+        value if math.isfinite(value) else 90.0
+        for value in (yaw, elbow, wrist, claw)
+    )
+    turn = math.tanh((yaw-90.0)/150.0)
+    flex = math.tanh((wrist-90.0)/110.0)
+    opening = 1.0 - min(1.0, abs(claw-90.0)/95.0)
+    shoulder = (304.0, 352.0)
+    base_angle = math.atan2(-148.0, -32.0) + turn*.25
+    joint = (shoulder[0] + BASE_LINK_LENGTH*math.cos(base_angle),
+             shoulder[1] + BASE_LINK_LENGTH*math.sin(base_angle))
+    arm_angle = -math.radians(elbow % 360.0)
+    end = (joint[0] + FOREARM_LINK_LENGTH*math.cos(arm_angle),
+           joint[1] + FOREARM_LINK_LENGTH*math.sin(arm_angle))
+    hand_angle = arm_angle + math.radians(32.0 + flex*69.0)
+    hand_end = (end[0] + TOOL_LINK_LENGTH*math.cos(hand_angle),
+                end[1] + TOOL_LINK_LENGTH*math.sin(hand_angle))
+    return dict(shoulder=shoulder, joint=joint, end=end, hand_end=hand_end,
+                arm_angle=arm_angle, hand_angle=hand_angle, turn=turn,
+                opening=opening)
 
 
 class ArmStage(tk.Canvas):
@@ -56,8 +93,9 @@ class ArmStage(tk.Canvas):
             return
         self._signature = signature
         self.delete('all')
-        scale = min(width / 760.0, height / 500.0)
-        ox, oy = (width - 760 * scale) / 2, (height - 500 * scale) / 2
+        scale = min(width / SCENE_WIDTH, height / SCENE_HEIGHT)
+        ox = (width - SCENE_WIDTH * scale) / 2 + 90*scale
+        oy = (height - SCENE_HEIGHT * scale) / 2 + 75*scale
 
         def coords(points):
             return [coordinate for x, y in points
@@ -93,22 +131,11 @@ class ArmStage(tk.Canvas):
         line(((300, 92), (300, 424)), '#1e2d45', dash=(2, 6))
         line(((113, 407), (532, 407)), '#26344e', dash=(3, 6))
 
-        # Use saturating display transforms, so signed 32-bit commands remain
-        # finite and legible.  The readout remains the actual nominal command.
-        yaw, elbow, wrist, claw = self._angles
-        turn = math.tanh((yaw-90.0)/150.0)
-        bend = math.tanh((elbow-90.0)/100.0)
-        flex = math.tanh((wrist-90.0)/110.0)
-        opening = 1.0 - min(1.0, abs(claw-90.0)/95.0)
-        shoulder = (304.0, 352.0)
-        joint = (272.0 + turn*35.0, 204.0)
-        arm_angle = math.radians(-8.0 + bend*45.0)
-        end = (joint[0] + 147*math.cos(arm_angle),
-               joint[1] + 147*math.sin(arm_angle))
-        hand_angle = math.radians(max(-10.0, min(110.0,
-                                    math.degrees(arm_angle) + 32.0 + flex*69.0)))
-        hand_end = (end[0] + 59*math.cos(hand_angle),
-                    end[1] + 59*math.sin(hand_angle))
+        geometry = arm_geometry(self._angles)
+        shoulder, joint = geometry['shoulder'], geometry['joint']
+        end, hand_end = geometry['end'], geometry['hand_end']
+        arm_angle, hand_angle = geometry['arm_angle'], geometry['hand_angle']
+        turn, opening = geometry['turn'], geometry['opening']
 
         # Layered footprint and plinth, with a yaw indicator on the upper ring.
         ellipse(313, 430, 136, 26, '#0b1120')
@@ -150,8 +177,9 @@ class ArmStage(tk.Canvas):
                      point(length-28, 0), point(19, radius-6)), '#40536e')
             line((point(19, -radius+4), point(length-24, -radius*.76+4)), '#a6b2c4', 1.5)
             line((point(24, radius-5), point(length-24, radius*.76-5)), accent, 2)
-            line((point(30, -3), point(length-29, -3)), '#25364f', 5)
-            line((point(30, -4), point(length-29, -4)), '#6d7e97', 1)
+            inset = min(30, length*.33)
+            line((point(inset, -3), point(length-inset, -3)), '#25364f', 5)
+            line((point(inset, -4), point(length-inset, -4)), '#6d7e97', 1)
             for along in (22, length-23):
                 bolt = point(along, radius-9)
                 ellipse(*bolt, 2.5, 2.5, '#bdc7d4', '#31435e')
@@ -176,11 +204,11 @@ class ArmStage(tk.Canvas):
               (end[0]+9, end[1]+16)), '#080f1c', 9, smooth=True)
         line(((shoulder[0]+20, shoulder[1]), (joint[0]+30, joint[1]+30),
               (end[0]+9, end[1]+16)), '#31445d', 3, smooth=True)
-        link(shoulder, joint, 29, self.ACCENTS[0])
+        link(shoulder, joint, 24, self.ACCENTS[0])
         link(joint, end, 23, self.ACCENTS[1])
         link(end, hand_end, 16, self.ACCENTS[2])
-        bearing(shoulder, 33, self.ACCENTS[0], -math.pi/2+turn)
-        bearing(joint, 29, self.ACCENTS[1], arm_angle)
+        bearing(shoulder, 29, self.ACCENTS[0], -math.pi/2+turn)
+        bearing(joint, 26, self.ACCENTS[1], arm_angle)
         bearing(end, 24, self.ACCENTS[2], hand_angle)
 
         # Parallel gripper with a moving finger gap, rather than a decorative
@@ -210,7 +238,7 @@ class ArmStage(tk.Canvas):
         # Four thin annotation leaders match the controller's channel colours.
         annotations = (
             (6, (272, 372), (112, 351), self.ACCENTS[0], 'Rotation'),
-            (7, (joint[0]-22, joint[1]-15), (108, 146), self.ACCENTS[1], 'Elbow'),
+            (7, (joint[0]-22, joint[1]-15), (108, 256), self.ACCENTS[1], 'Elbow'),
             (8, (end[0]+9, end[1]-23), (589, 109), self.ACCENTS[2], 'Wrist'),
             (9, hand_point(15, -gap-12), (612, 261), self.ACCENTS[3], 'Claw'),
         )

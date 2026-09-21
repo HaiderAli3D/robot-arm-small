@@ -216,3 +216,9 @@ All 205 Python tests pass, including keyboard-only zeroing, immediate steps, USB
 Redesigned the keyboard UI with an articulated command schematic, joint dials, eight-second command history, clickable step buttons, and F11 fullscreen mode. Geometry is illustrative and bounded for display only; servo commands and the seven-degree keyboard steps are unchanged. The diagram reads raw commands, so saving a displayed zero does not reposition it. History uses a shared automatic scale and raw degrees relative to boot center.
 
 All 207 Python tests pass. New regression checks cover single activation per Enter press and rebinding the Windows keyboard hook after Tk recreates the fullscreen window handle. Preview UI input through the desktop automation tool verified one real window-targeted `2` key event increments IO6 by seven degrees and resumes control. Tk runtime checks covered fullscreen round trips, default/compact/small layouts (1200x860, 980x680, 820x560), and 81 extreme/default schematic pose combinations. Small displays retain footer controls and use scrolling when necessary. The final live window was visually inspected and reported `Connected: COM70`, paused, with the board's existing positions loaded. No firmware changes were needed.
+
+## Schematic proportions and IO7 direction
+
+Shortened the IO6–IO7 link to 50 drawing units (previously about 151) and extended IO8–IO9 to 165 (previously 59). IO7 now draws a linear, reversed 180-degree sweep: raw 0 points right, 90 up, and 180 left. IO8 retains its previous relative response. The user confirmed this direction change is visual only; motor commands, key mapping, and firmware are unchanged.
+
+All 210 Python tests pass, including exact link lengths, the full reversed semicircle, and finite geometry for extreme commands. The new drawing was visually inspected in the controller preview. The renderer also passed 81 extreme/default pose combinations without introducing motor limits.

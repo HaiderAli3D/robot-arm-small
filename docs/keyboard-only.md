@@ -12,6 +12,8 @@ Click the keyboard controller window, then use the keys below. The original came
 
 The showcase console includes a dimensional arm schematic, color-matched joint dials, and eight seconds of command history. The illustration responds to your commands; it is not a measured pose or a mechanical simulation. Setting zero keeps the illustration and history anchored to the same raw commands. Smaller windows simplify the layout, with scrolling available when needed.
 
+The schematic uses a short IO6–IO7 base link and an extended IO8–IO9 tool link. IO7 sweeps a full 180° between raw commands 0 and 180, with its visual direction reversed to match the motor mounting. This changes the illustration, not the motor's key mapping or travel limits.
+
 Press **F11** for fullscreen presentation mode and press it again to return to the window. The joint key buttons also work with the mouse. **Tab** moves between buttons and **Enter** activates the focused button.
 
 If your board has a different port, edit `ROBOT_ARM_PORT=COM70` in the new launcher. You can also supply a port from PowerShell:
